@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-essential-metrics-k8s-applications-k8s-applications-overview.json-k8s-applications-overview
+  annotations:
+    grafana_folder: "Essential Metrics K8s-applications"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-essential-metrics-k8s-applications-apm-services.json-apm-services
+  annotations:
+    grafana_folder: "Essential Metrics K8s-applications"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-essential-metrics-k8s-applications-vm-overview.json-vm-overview
+  annotations:
+    grafana_folder: "Essential Metrics K8s-applications"
+---
+

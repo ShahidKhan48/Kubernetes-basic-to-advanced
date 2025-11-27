@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-nginx-nginx-ingress-controller
+  annotations:
+    grafana_folder: "DevOps/NGINX"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-nginx-analytics-nginx-metrics-from-loki
+  annotations:
+    grafana_folder: "DevOps/NGINX"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-nginx-kubernetes-nginx-ingress-prometheus-nextgen
+  annotations:
+    grafana_folder: "DevOps/NGINX"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-nginx-request-handling-performance
+  annotations:
+    grafana_folder: "DevOps/NGINX"
+---
+

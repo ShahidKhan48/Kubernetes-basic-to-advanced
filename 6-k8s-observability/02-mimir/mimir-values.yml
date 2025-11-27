@@ -1,0 +1,464 @@
+# Mimir Distributed Helm Chart Values
+# Chart Version: 6.0.3
+# App Version: 3.0.0
+
+# Global configuration
+global:
+  image:
+    registry: docker.io
+  clusterDomain: cluster.local
+  extraArgs:
+    - -config.expand-env=true
+  extraEnv:
+    - name: MINIO_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: minio-credentials
+          key: rootUser
+    - name: MINIO_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: minio-credentials
+          key: rootPassword
+
+# Mimir image configuration
+image:
+  repository: grafana/mimir
+  tag: "3.0.0"
+  pullPolicy: IfNotPresent
+
+# MinIO configuration (for development)
+minio:
+  enabled: true
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  buckets:
+    - name: mimir-blocks
+      policy: none
+      purge: false
+    - name: mimir-ruler
+      policy: none
+      purge: false
+    - name: mimir-alertmanager
+      policy: none
+      purge: false
+
+# Nginx gateway
+nginx:
+  enabled: true
+  replicas: 2
+  image:
+    repository: nginx
+    tag: "1.25-alpine"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  service:
+    type: ClusterIP
+    port: 80
+  basicAuth:
+    enabled: true
+    username: admin
+    password: admin123
+
+# Distributor configuration
+distributor:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Ingester configuration
+ingester:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 8Gi
+  persistentVolume:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+  zoneAwareReplication:
+    enabled: true
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - ingester
+          topologyKey: kubernetes.io/hostname
+
+# Querier configuration
+querier:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 1000m
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+# Query Frontend configuration
+query_frontend:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Query Scheduler configuration
+query_scheduler:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+# Store Gateway configuration
+store_gateway:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 1000m
+      memory: 4Gi
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+  zoneAwareReplication:
+    enabled: true
+
+# Compactor configuration
+compactor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 1000m
+      memory: 4Gi
+  persistentVolume:
+    enabled: true
+    size: 20Gi
+
+# Ruler configuration
+ruler:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Alertmanager configuration
+alertmanager:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+  persistentVolume:
+    enabled: true
+    size: 5Gi
+  statefulSet:
+    enabled: true
+
+# Overrides Exporter
+overrides_exporter:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Memcached configuration
+memcached:
+  enabled: true
+  image:
+    repository: memcached
+    tag: "1.6.22-alpine"
+
+# Results cache
+results-cache:
+  enabled: true
+  replicas: 2
+  allocatedMemory: 1024
+  maxItemMemory: 5
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+# Chunks cache
+chunks-cache:
+  enabled: true
+  replicas: 2
+  allocatedMemory: 2048
+  maxItemMemory: 10
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 200m
+      memory: 1Gi
+
+# Index cache
+index-cache:
+  enabled: true
+  replicas: 2
+  allocatedMemory: 1024
+  maxItemMemory: 5
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+# Metadata cache
+metadata-cache:
+  enabled: true
+  replicas: 2
+  allocatedMemory: 512
+  maxItemMemory: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+# Mimir configuration
+mimir:
+  config: |
+    # Multitenancy
+    multitenancy_enabled: true
+    
+    # Server configuration
+    server:
+      http_listen_port: 8080
+      grpc_listen_port: 9095
+      grpc_server_max_recv_msg_size: 104857600
+      grpc_server_max_send_msg_size: 104857600
+      grpc_server_max_concurrent_streams: 1000
+      log_level: info
+      log_format: logfmt
+    
+    # Distributor configuration
+    distributor:
+      ring:
+        kvstore:
+          store: memberlist
+      instance_limits:
+        max_ingestion_rate: 100000
+        max_inflight_push_requests: 2000
+    
+    # Ingester configuration
+    ingester:
+      ring:
+        kvstore:
+          store: memberlist
+        replication_factor: 3
+        tokens_file_path: /data/tokens
+        zone_awareness_enabled: true
+    
+    # Blocks storage configuration
+    blocks_storage:
+      backend: s3
+      s3:
+        endpoint: minio:9000
+        bucket_name: mimir-blocks
+        access_key_id: ${MINIO_ACCESS_KEY}
+        secret_access_key: ${MINIO_SECRET_KEY}
+        insecure: true
+      tsdb:
+        dir: /data/tsdb
+        retention_period: 90d
+      bucket_store:
+        sync_dir: /data/tsdb-sync
+        chunks_cache:
+          backend: memcached
+          memcached:
+            addresses: {{ include "mimir.chunksCacheAddress" . }}
+        index_cache:
+          backend: memcached
+          memcached:
+            addresses: {{ include "mimir.indexCacheAddress" . }}
+        metadata_cache:
+          backend: memcached
+          memcached:
+            addresses: {{ include "mimir.metadataCacheAddress" . }}
+    
+    # Compactor configuration
+    compactor:
+      data_dir: /data
+      sharding_ring:
+        kvstore:
+          store: memberlist
+      compaction_interval: 30m
+      deletion_delay: 2h
+      max_closing_blocks_concurrency: 2
+      max_opening_blocks_concurrency: 4
+    
+    # Store gateway configuration
+    store_gateway:
+      sharding_ring:
+        kvstore:
+          store: memberlist
+        replication_factor: 3
+        zone_awareness_enabled: true
+    
+    # Query frontend configuration
+    frontend:
+      results_cache:
+        backend: memcached
+        memcached:
+          addresses: {{ include "mimir.resultsCacheAddress" . }}
+      scheduler_address: {{ template "mimir.fullname" . }}-query-scheduler-headless.{{ .Release.Namespace }}.svc:{{ include "mimir.serverGrpcListenPort" . }}
+    
+    # Frontend worker configuration
+    frontend_worker:
+      scheduler_address: {{ template "mimir.fullname" . }}-query-scheduler-headless.{{ .Release.Namespace }}.svc:{{ include "mimir.serverGrpcListenPort" . }}
+    
+    # Querier configuration
+    querier:
+      max_concurrent: 16
+    
+    # Query scheduler configuration
+    query_scheduler:
+      max_outstanding_requests_per_tenant: 800
+    
+    # Ruler configuration
+    ruler:
+      enable_api: true
+      rule_path: /data
+      alertmanager_url: dnssrvnoa+http://_http-metrics._tcp.{{ template "mimir.fullname" . }}-alertmanager-headless.{{ .Release.Namespace }}.svc.{{ .Values.global.clusterDomain }}/alertmanager
+    
+    # Ruler storage configuration
+    ruler_storage:
+      backend: s3
+      s3:
+        endpoint: minio:9000
+        bucket_name: mimir-ruler
+        access_key_id: ${MINIO_ACCESS_KEY}
+        secret_access_key: ${MINIO_SECRET_KEY}
+        insecure: true
+    
+    # Alertmanager configuration
+    alertmanager:
+      data_dir: /data
+      enable_api: true
+      external_url: /alertmanager
+    
+    # Alertmanager storage configuration
+    alertmanager_storage:
+      backend: s3
+      s3:
+        endpoint: minio:9000
+        bucket_name: mimir-alertmanager
+        access_key_id: ${MINIO_ACCESS_KEY}
+        secret_access_key: ${MINIO_SECRET_KEY}
+        insecure: true
+    
+    # Limits configuration
+    limits:
+      ingestion_rate: 100000
+      ingestion_burst_size: 200000
+      max_global_series_per_user: 1000000
+      max_global_series_per_metric: 50000
+      max_label_names_per_series: 30
+      max_label_name_length: 1024
+      max_label_value_length: 4096
+      max_metadata_length: 1024
+      out_of_order_time_window: 1h
+      compactor_blocks_retention_period: 90d
+    
+    # Memberlist configuration
+    memberlist:
+      abort_if_cluster_join_fails: false
+      bind_port: 7946
+      join_members:
+        - {{ include "mimir.fullname" . }}-gossip-ring
+
+# Service Monitor for Prometheus scraping
+metaMonitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      app: mimir
+    interval: 30s
+    scrapeTimeout: 30s
+
+# RBAC configuration
+rbac:
+  type: scc
+  create: true
+
+# Service account
+serviceAccount:
+  create: true
+  name: mimir
+  annotations: {}

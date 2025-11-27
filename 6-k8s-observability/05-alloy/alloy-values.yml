@@ -1,0 +1,551 @@
+# k8s-monitoring (Alloy) Helm Chart Values
+# Chart Version: 3.5.6
+# App Version: 1.5.0
+
+# Cluster configuration
+cluster:
+  name: spicybiryaniwala-cluster
+  kubernetesAPIService: kubernetes.default.svc.cluster.local:443
+  platform: ""
+
+# External services configuration
+externalServices:
+  # Prometheus/Mimir configuration
+  prometheus:
+    host: http://mimir-nginx:80
+    hostKey: host
+    protocol: remote_write
+    writeEndpoint: /api/v1/push
+    queryEndpoint: /prometheus/api/v1/query
+    tenantId: default
+    tenantIdKey: tenantId
+    authMode: none
+    queue_config:
+      capacity: 10000
+      min_shards: 1
+      max_shards: 50
+      max_samples_per_send: 2000
+      batch_send_deadline: 5s
+      min_backoff: 30ms
+      max_backoff: 5s
+      retry_on_http_429: true
+    processors:
+      batch:
+        size: 8192
+        timeout: 2s
+      memoryLimiter:
+        enabled: true
+        checkInterval: 1s
+        limit: 512MiB
+    wal:
+      truncateFrequency: 2h
+      minKeepaliveTime: 5m
+      maxKeepaliveTime: 8h
+    sendNativeHistograms: false
+    secret:
+      create: false
+
+  # Loki configuration
+  loki:
+    host: http://loki-gateway:80
+    hostKey: host
+    protocol: loki
+    writeEndpoint: /loki/api/v1/push
+    queryEndpoint: /loki/api/v1/query
+    tenantId: default
+    tenantIdKey: tenantId
+    authMode: none
+    processors:
+      batch:
+        size: 8192
+        timeout: 2s
+      memoryLimiter:
+        enabled: true
+        checkInterval: 1s
+        limit: 512MiB
+    secret:
+      create: false
+
+  # Tempo configuration
+  tempo:
+    host: tempo-distributor:4317
+    hostKey: host
+    protocol: otlp
+    tenantId: default
+    tenantIdKey: tenantId
+    authMode: none
+    secret:
+      create: false
+
+# Metrics configuration
+metrics:
+  enabled: true
+  scrapeInterval: 60s
+  maxCacheSize: 100000
+  extraRelabelingRules: ""
+  extraMetricRelabelingRules: ""
+
+  # Auto-discovery configuration
+  autoDiscover:
+    enabled: true
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      includeMetrics: []
+      excludeMetrics: []
+    annotations:
+      scrape: k8s.grafana.com/scrape
+      job: k8s.grafana.com/job
+      instance: k8s.grafana.com/instance
+      metricsPath: k8s.grafana.com/metrics.path
+      metricsPortName: k8s.grafana.com/metrics.portName
+      metricsPortNumber: k8s.grafana.com/metrics.portNumber
+      metricsScheme: k8s.grafana.com/metrics.scheme
+      metricsScrapeInterval: k8s.grafana.com/metrics.scrapeInterval
+
+  # Alloy metrics
+  alloy:
+    enabled: true
+    scrapeInterval: ""
+    labelMatchers:
+      app.kubernetes.io/name: alloy.*
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics: []
+      excludeMetrics: []
+
+  # Kube-state-metrics
+  kube-state-metrics:
+    enabled: true
+    scrapeInterval: ""
+    labelMatchers:
+      app.kubernetes.io/name: kube-state-metrics
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    service:
+      port: http
+      isTLS: false
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics: []
+      excludeMetrics: []
+
+  # Node exporter
+  node-exporter:
+    enabled: true
+    scrapeInterval: ""
+    labelMatchers:
+      app.kubernetes.io/name: prometheus-node-exporter.*
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    service:
+      isTLS: false
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics: []
+      excludeMetrics: []
+      dropMetricsForFilesystem:
+        - tempfs
+
+  # Kubelet metrics
+  kubelet:
+    enabled: true
+    nodeAddressFormat: direct
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics: []
+      excludeMetrics: []
+
+  # cAdvisor metrics
+  cadvisor:
+    enabled: true
+    nodeAddressFormat: direct
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics: []
+      excludeMetrics: []
+      dropEmptyContainerLabels: true
+      dropEmptyImageLabels: true
+      keepPhysicalFilesystemDevices:
+        - mmcblk.p.+
+        - nvme.+
+        - rbd.+
+        - sd.+
+        - vd.+
+        - xvd.+
+        - dasd.+
+      keepPhysicalNetworkDevices:
+        - 'en[ospx][0-9].*'
+        - 'wlan[0-9].*'
+        - 'eth[0-9].*'
+
+  # API server metrics
+  apiserver:
+    enabled: true
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      includeMetrics: []
+      excludeMetrics: []
+
+  # Kube-proxy metrics
+  kubeProxy:
+    enabled: true
+    port: 10249
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      includeMetrics: []
+      excludeMetrics: []
+
+  # Controller manager (usually disabled in managed clusters)
+  kubeControllerManager:
+    enabled: false
+    port: 10257
+
+  # Scheduler (usually disabled in managed clusters)
+  kubeScheduler:
+    enabled: false
+    port: 10259
+
+  # Cost monitoring
+  cost:
+    enabled: true
+    scrapeInterval: ""
+    labelMatchers:
+      app.kubernetes.io/name: opencost
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics: []
+      excludeMetrics: []
+
+  # ServiceMonitors
+  serviceMonitors:
+    enabled: true
+    namespaces: []
+    selector: ""
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+
+  # PodMonitors
+  podMonitors:
+    enabled: true
+    namespaces: []
+    selector: ""
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+
+  # Probes
+  probes:
+    enabled: true
+    namespaces: []
+    selector: ""
+    scrapeInterval: ""
+    extraRelabelingRules: ""
+    extraMetricRelabelingRules: ""
+
+# Logs configuration
+logs:
+  enabled: true
+
+  # Pod logs
+  pod_logs:
+    enabled: true
+    discovery: all
+    annotation: k8s.grafana.com/logs.autogather
+    namespaces: []
+    excludeNamespaces: []
+    extraRelabelingRules: ""
+    gatherMethod: volumes
+    extraStageBlocks: ""
+    labels:
+      app: app.kubernetes.io/name
+    annotations:
+      job: k8s.grafana.com/logs.job
+    structuredMetadata: {}
+
+  # Cluster events
+  cluster_events:
+    enabled: true
+    logFormat: logfmt
+    namespaces: []
+    extraStageBlocks: ""
+    logToStdout: false
+
+  # Journal logs (disabled by default)
+  journal:
+    enabled: false
+    path: /var/log/journal
+    maxAge: 8h
+    jobLabel: integrations/kubernetes/journal
+    formatAsJson: false
+    units: []
+
+# Traces configuration
+traces:
+  enabled: true
+
+# Profiles configuration (disabled by default)
+profiles:
+  enabled: false
+  ebpf:
+    enabled: false
+  java:
+    enabled: false
+  pprof:
+    enabled: false
+
+# Receivers configuration
+receivers:
+  grpc:
+    enabled: true
+    port: 4317
+    disable_debug_metrics: true
+  
+  http:
+    enabled: true
+    port: 4318
+    disable_debug_metrics: true
+  
+  prometheus:
+    enabled: false
+    port: 9999
+  
+  jaeger:
+    grpc:
+      enabled: false
+      port: 14250
+    thriftBinary:
+      enabled: false
+      port: 6832
+    thriftCompact:
+      enabled: false
+      port: 6831
+    thriftHttp:
+      enabled: false
+      port: 14268
+  
+  zipkin:
+    enabled: false
+    port: 9411
+
+  processors:
+    batch:
+      size: 16384
+      maxSize: 0
+      timeout: 2s
+    
+    k8sattributes:
+      metadata:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.deployment.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.cronjob.name
+        - k8s.job.name
+        - k8s.node.name
+        - k8s.pod.uid
+        - k8s.pod.start_time
+      labels: []
+      annotations: []
+
+# Test configuration
+test:
+  enabled: false
+
+# Config validator
+configValidator:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations: []
+  serviceAccount:
+    name: ""
+
+# Global configuration
+global:
+  image:
+    registry: ""
+    pullSecrets: []
+
+# Kube-state-metrics configuration
+kube-state-metrics:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  autosharding:
+    enabled: false
+  updateStrategy: Recreate
+  prometheusScrape: false
+
+# Node exporter configuration
+prometheus-node-exporter:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  podAnnotations:
+    k8s.grafana.com/logs.job: integrations/node_exporter
+  service:
+    annotations:
+      prometheus.io/scrape: null
+
+# Windows exporter (disabled)
+prometheus-windows-exporter:
+  enabled: false
+
+# Prometheus operator CRDs (disabled)
+prometheus-operator-crds:
+  enabled: false
+
+# OpenCost configuration
+opencost:
+  enabled: true
+  opencost:
+    exporter:
+      defaultClusterId: spicybiryaniwala-cluster
+      extraEnv:
+        CURRENT_CLUSTER_ID_FILTER_ENABLED: "true"
+        PROM_CLUSTER_ID_LABEL: cluster
+    prometheus:
+      external:
+        enabled: true
+        url: http://mimir-nginx:80/prometheus
+      internal:
+        enabled: false
+    ui:
+      enabled: false
+    nodeSelector:
+      kubernetes.io/os: linux
+
+# Alloy configuration
+alloy:
+  logging:
+    level: info
+    format: logfmt
+  
+  liveDebugging:
+    enabled: false
+  
+  alloy:
+    clustering:
+      enabled: true
+    configMap:
+      create: false
+    extraPorts:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+        protocol: TCP
+    mounts:
+      extra:
+        - name: kubernetes-monitoring-telemetry
+          mountPath: /etc/kubernetes-monitoring-telemetry
+  
+  controller:
+    type: statefulset
+    nodeSelector:
+      kubernetes.io/os: linux
+    podAnnotations:
+      k8s.grafana.com/logs.job: integrations/alloy
+    volumes:
+      extra:
+        - name: kubernetes-monitoring-telemetry
+          configMap:
+            name: kubernetes-monitoring-telemetry
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+  
+  crds:
+    create: false
+
+# Alloy Events configuration
+alloy-events:
+  logging:
+    level: info
+    format: logfmt
+  
+  alloy:
+    configMap:
+      create: false
+  
+  controller:
+    type: deployment
+    replicas: 1
+    nodeSelector:
+      kubernetes.io/os: linux
+    podAnnotations:
+      k8s.grafana.com/logs.job: integrations/alloy
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  
+  crds:
+    create: false
+
+# Alloy Logs configuration
+alloy-logs:
+  logging:
+    level: info
+    format: logfmt
+  
+  alloy:
+    configMap:
+      create: false
+    clustering:
+      enabled: false
+    mounts:
+      varlog: true
+      dockercontainers: false
+  
+  controller:
+    type: daemonset
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations:
+      - effect: NoSchedule
+        operator: Exists
+    podAnnotations:
+      k8s.grafana.com/logs.job: integrations/alloy
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+  
+  crds:
+    create: false
+
+# Alloy Profiles configuration (disabled)
+alloy-profiles:
+  enabled: false

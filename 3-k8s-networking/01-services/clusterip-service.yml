@@ -1,0 +1,91 @@
+# ClusterIP Service Examples
+
+---
+# Basic ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  labels:
+    app: web-app
+    tier: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    tier: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+
+---
+# Multi-Port ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  labels:
+    app: api-server
+    tier: backend
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: api-server
+    version: v1
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: grpc
+    port: 9000
+    targetPort: 9000
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+
+---
+# Service with Session Affinity
+apiVersion: v1
+kind: Service
+metadata:
+  name: session-service
+  labels:
+    app: session-app
+spec:
+  type: ClusterIP
+  selector:
+    app: session-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+
+---
+# Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-headless
+  labels:
+    app: database
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: database
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432

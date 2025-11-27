@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-mysql-wip-mysql-logs
+  annotations:
+    grafana_folder: "DevOps/Mysql WIP"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-mysql-wip-mysql-overview
+  annotations:
+    grafana_folder: "DevOps/Mysql WIP"
+---
+

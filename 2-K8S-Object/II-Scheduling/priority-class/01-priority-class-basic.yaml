@@ -1,0 +1,243 @@
+# System Priority Classes
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: system-critical
+value: 2000000000
+globalDefault: false
+description: "Used for system critical pods that must not be evicted"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "High priority class for important applications"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+value: 500000
+globalDefault: true
+description: "Medium priority class - default for most applications"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 100000
+globalDefault: false
+description: "Low priority class for batch jobs and non-critical workloads"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: best-effort
+value: 0
+globalDefault: false
+description: "Best effort priority for development and testing"
+
+---
+# System Critical Pod Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: system-critical-pod
+  namespace: kube-system
+spec:
+  priorityClassName: system-critical
+  containers:
+  - name: system-app
+    image: busybox:latest
+    command: ['sleep', '3600']
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+---
+# High Priority Application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-app-deployment
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: critical-app
+  template:
+    metadata:
+      labels:
+        app: critical-app
+    spec:
+      priorityClassName: high-priority
+      containers:
+      - name: critical-app
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+# Database with High Priority
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: database-statefulset
+  namespace: default
+spec:
+  serviceName: database-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      priorityClassName: high-priority
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Batch Job with Low Priority
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processing-job
+  namespace: default
+spec:
+  completions: 5
+  parallelism: 2
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: batch-job
+    spec:
+      priorityClassName: low-priority
+      restartPolicy: Never
+      containers:
+      - name: batch-processor
+        image: busybox:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Processing batch job..."
+          sleep 60
+          echo "Batch job completed"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+---
+# Development Environment with Best Effort
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dev-app-deployment
+  namespace: development
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dev-app
+  template:
+    metadata:
+      labels:
+        app: dev-app
+    spec:
+      priorityClassName: best-effort
+      containers:
+      - name: dev-app
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+
+---
+# CronJob with Low Priority
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-cronjob
+  namespace: default
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: cleanup-job
+        spec:
+          priorityClassName: low-priority
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: busybox:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running cleanup at $(date)"
+              # Cleanup logic here
+              find /tmp -type f -mtime +7 -delete
+              echo "Cleanup completed at $(date)"
+            resources:
+              requests:
+                memory: "32Mi"
+                cpu: "25m"

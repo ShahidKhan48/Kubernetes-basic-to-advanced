@@ -1,0 +1,157 @@
+# Basic Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  labels:
+    environment: dev
+    team: backend
+
+---
+# Namespace with Resource Quotas
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    team: platform
+  annotations:
+    description: "Production environment namespace"
+
+---
+# Resource Quota for Namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    persistentvolumeclaims: "10"
+    pods: "20"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"
+    count/deployments.apps: "10"
+
+---
+# Limit Range for Namespace
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: production-limits
+  namespace: production
+spec:
+  limits:
+  # Default limits for containers
+  - default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container
+  # Limits for pods
+  - max:
+      cpu: "2"
+      memory: "2Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    type: Pod
+  # Limits for PVCs
+  - max:
+      storage: "10Gi"
+    min:
+      storage: "1Gi"
+    type: PersistentVolumeClaim
+
+---
+# Network Policy for Namespace Isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-network-policy
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: production
+  # Allow traffic from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow traffic to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: production
+
+---
+# Testing Namespace with Relaxed Policies
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: testing
+  labels:
+    environment: test
+    team: qa
+
+---
+# Resource Quota for Testing
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: testing-quota
+  namespace: testing
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "10"
+    services: "5"
+
+---
+# Monitoring Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    environment: shared
+    purpose: monitoring
+  annotations:
+    description: "Monitoring and observability tools"
+
+---
+# System Namespace Example
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: system-tools
+  labels:
+    environment: system
+    purpose: tools
+  annotations:
+    description: "System utilities and tools"

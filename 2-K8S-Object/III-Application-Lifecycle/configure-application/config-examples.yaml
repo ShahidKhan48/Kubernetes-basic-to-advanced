@@ -1,0 +1,208 @@
+# Application Configuration Examples
+
+---
+# ConfigMap for Application Settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-app-config
+  labels:
+    app: web-application
+data:
+  # Simple key-value pairs
+  app.env: "production"
+  debug.enabled: "false"
+  max.connections: "100"
+  
+  # Configuration files
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name spicybiryaniwala.shop;
+        
+        location / {
+            proxy_pass http://backend:8080;
+            proxy_set_header Host $host;
+        }
+        
+        location /health {
+            return 200 "OK";
+        }
+    }
+  
+  database.properties: |
+    host=postgres.spicybiryaniwala.shop
+    port=5432
+    database=spicybiryani
+    ssl=true
+    pool.size=20
+
+---
+# Secret for Sensitive Data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  # Base64 encoded values
+  db-username: YWRtaW4=  # admin
+  db-password: c2VjdXJlMTIz  # secure123
+  api-key: YWJjZGVmZ2hpams=  # abcdefghijk
+  jwt-secret: bXlzdXBlcnNlY3JldGp3dA==  # mysupersecretjwt
+
+---
+# Pod with Environment Variables
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-config-pod
+spec:
+  containers:
+  - name: web-app
+    image: spicybiryaniwala.shop/web-app:v1.0.0
+    env:
+    # Direct environment variables
+    - name: APP_ENV
+      value: "production"
+    - name: PORT
+      value: "8080"
+    
+    # From ConfigMap
+    - name: DEBUG_ENABLED
+      valueFrom:
+        configMapKeyRef:
+          name: web-app-config
+          key: debug.enabled
+    - name: MAX_CONNECTIONS
+      valueFrom:
+        configMapKeyRef:
+          name: web-app-config
+          key: max.connections
+    
+    # From Secret
+    - name: DB_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: app-secrets
+          key: db-username
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: app-secrets
+          key: db-password
+    
+    ports:
+    - containerPort: 8080
+
+---
+# Pod with Volume Mounts
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-config-pod
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    volumeMounts:
+    # Mount ConfigMap as files
+    - name: nginx-config
+      mountPath: /etc/nginx/conf.d
+    - name: app-config
+      mountPath: /etc/app
+    
+    # Mount Secret as files
+    - name: ssl-certs
+      mountPath: /etc/ssl/private
+      readOnly: true
+    
+    ports:
+    - containerPort: 80
+  
+  volumes:
+  # ConfigMap volumes
+  - name: nginx-config
+    configMap:
+      name: web-app-config
+      items:
+      - key: nginx.conf
+        path: default.conf
+  
+  - name: app-config
+    configMap:
+      name: web-app-config
+      items:
+      - key: database.properties
+        path: database.properties
+  
+  # Secret volume
+  - name: ssl-certs
+    secret:
+      secretName: ssl-certificates
+      defaultMode: 0400
+
+---
+# Deployment with Complete Configuration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: configured-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: configured-app
+  template:
+    metadata:
+      labels:
+        app: configured-app
+    spec:
+      containers:
+      - name: app
+        image: spicybiryaniwala.shop/app:v2.0.0
+        
+        # Environment variables from multiple sources
+        envFrom:
+        - configMapRef:
+            name: web-app-config
+        - secretRef:
+            name: app-secrets
+        
+        # Additional specific env vars
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        # Volume mounts for configuration files
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: secret-volume
+          mountPath: /app/secrets
+          readOnly: true
+        
+        ports:
+        - containerPort: 8080
+        
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+      
+      volumes:
+      - name: config-volume
+        configMap:
+          name: web-app-config
+      - name: secret-volume
+        secret:
+          secretName: app-secrets

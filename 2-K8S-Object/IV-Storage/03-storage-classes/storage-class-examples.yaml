@@ -1,0 +1,235 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  encrypted: "true"
+  fsType: ext4
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard-hdd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"  # Default storage class
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  encrypted: "true"
+  fsType: ext4
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: high-performance
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: io2
+  iops: "10000"
+  encrypted: "true"
+  fsType: ext4
+reclaimPolicy: Retain  # Keep data after PVC deletion
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+# Database StatefulSet with dynamic storage
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-statefulset
+  labels:
+    app: mysql
+spec:
+  serviceName: mysql
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+        
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root-password
+        - name: MYSQL_DATABASE
+          value: "spicybiryaniwala"
+        - name: MYSQL_USER
+          value: "appuser"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: user-password
+        
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+            - mysql
+            - -h
+            - localhost
+            - -e
+            - "SELECT 1"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  
+  # Dynamic storage provisioning
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd  # Use fast SSD storage
+      resources:
+        requests:
+          storage: 50Gi
+---
+# Application deployment with dynamic PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+  labels:
+    app: web-app
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: standard-hdd  # Use standard storage
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-with-storage
+  labels:
+    app: web-app-storage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app-storage
+  template:
+    metadata:
+      labels:
+        app: web-app-storage
+    spec:
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        volumeMounts:
+        - name: app-data
+          mountPath: /app/data
+        - name: app-uploads
+          mountPath: /app/uploads
+        
+        env:
+        - name: DATA_PATH
+          value: "/app/data"
+        - name: UPLOAD_PATH
+          value: "/app/uploads"
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: app-data-pvc
+      - name: app-uploads
+        persistentVolumeClaim:
+          claimName: app-uploads-pvc
+---
+# High-performance storage for uploads
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-uploads-pvc
+  labels:
+    app: web-app
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: high-performance  # Use high-performance storage
+  resources:
+    requests:
+      storage: 100Gi
+---
+# MySQL secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+type: Opaque
+data:
+  root-password: cm9vdF9wYXNzd29yZF8xMjM=  # root_password_123
+  user-password: dXNlcl9wYXNzd29yZF8xMjM=  # user_password_123
+---
+# MySQL service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet

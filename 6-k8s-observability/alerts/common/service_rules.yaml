@@ -1,0 +1,235 @@
+namespace: common
+groups:
+- name: common_rules
+  rules:
+  - alert: Container_High_CPU_Usage_Critical
+    annotations:
+      description: "Container CPU Usage High from {{ $labels.pod }}"
+      summary: "{{ $labels.pod }} has cpu usage greater than 90% for 5 minute"
+    expr: (100* sum(rate(container_cpu_usage_seconds_total{namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*", image!=""}[2m])) by (cluster,namespace,pod) / sum(kube_pod_container_resource_limits{ namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*",unit="core"}) by (cluster,namespace,pod) != 0) > 90
+    for: 5m
+    labels:
+      severity: critical
+      type: service
+      
+  - alert: Container_High_CPU_Usage_Warning
+    annotations:
+      description: "Container CPU Usage High from {{ $labels.pod }}"
+      summary: "{{ $labels.pod }} has cpu usage greater than 85% for 5 minute"
+    expr: (100* sum(rate(container_cpu_usage_seconds_total{namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*", image!=""}[2m])) by (cluster,namespace,pod) / sum(kube_pod_container_resource_limits{ namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*",unit="core"}) by (cluster,namespace,pod) != 0) > 85
+    for: 5m
+    labels:
+      severity: warning
+      type: service
+
+  - alert: Container_High_Memory_Usage_Critical
+    annotations:
+      description: "Container Memory Usage High from {{ $labels.pod }}"
+      summary: "{{ $labels.pod }} has Memory usage greater than 95% for 2 minute"
+    expr: (100* sum(container_memory_working_set_bytes{namespace !~"observe|trino-gcp|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*",image!=""}) by (cluster,namespace,pod) / sum(kube_pod_container_resource_limits{ namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*",unit="byte"}) by (cluster,namespace,pod) != 0) > 95
+    for: 2m
+    labels:
+      severity: critical
+      type: service
+
+  - alert: Container_High_Memory_Usage_Warning
+    annotations:
+      description: "Container Memory Usage High from {{ $labels.pod }}"
+      summary: "{{ $labels.pod }} has Memory usage greater than 90% for 2 minute"
+    expr: (100* sum(container_memory_working_set_bytes{namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*",image!=""}) by (cluster,namespace,pod) / sum(kube_pod_container_resource_limits{ namespace !~"observe|kube-system|monitoring|opencost|imagepullsecret-patcher|ingress|db-monitor|castai-.*|cert-.*",unit="byte"}) by (cluster,namespace,pod) != 0) > 90
+    for: 2m
+    labels:
+      severity: warning
+      type: service
+
+  - record: response_time_95th_percentile
+    expr: histogram_quantile(0.95, sum(rate(http_server_duration_bucket{http_status_code!~"3.."}[5m])) by (le, container, cluster, http_route, http_status_code, namespace))>=10000
+
+  - alert: "High95thResponseTime"
+    expr: response_time_95th_percentile > 10000
+    for: 2m
+    labels:
+      severity: warning
+      container: "{{ $labels.container }}"
+      type: service
+    annotations:
+      summary: "95th percentile response time exceeded on {{ $labels.container }} and {{ $labels.http_method }} {{ $labels.http_route }}"
+      description: "{{ $labels.container }}, {{ $labels.http_method }} {{ $labels.http_route }} has a 95th percentile response time above 10 seconds (current value: {{ $value }}ms)"
+
+  - alert: "HTTP5XXErrorRate"
+    expr: |
+       100 * sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container!~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",status=~"5..",uri!~".*actuator.*|/{realmId}/{userId}/freeFlow/search/elastic/v1"}[5m])) / sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container!~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking"}[5m])) > 10
+    for: 3m
+    labels:
+      severity: warning
+      job: "{{ $labels.job }}"
+      container: "{{ $labels.container }}"
+      type: service
+    annotations:
+      summary: "High HTTP 5xx rate from {{ $labels.container }}"
+      description: |
+        {{ $labels.container }} service has a 5xx rate greater than 25% for more than 3 mins.
+        Current error rate: {{ $value }}.
+        Top 5 URIs with 5xx errors in the last hour:
+        {{ range query (printf "topk(5, sum(increase(http_server_requests_seconds_count{container=\"%s\",status=~\"5..\"}[1h])) by (uri))" $labels.container) }}
+        - {{ .Labels.uri }}
+        {{ end }}
+  - alert: "HTTP5XXErrorRate"
+    expr: |
+      100 * sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container!~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",status=~"5..",uri!~".*actuator.*|/{realmId}/{userId}/freeFlow/search/elastic/v1"}[5m])) / sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container!~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",uri!~".*actuator.*"}[5m])) > 20
+    for: 3m
+    labels:
+      severity: critical
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP 5xx rate from {{ $labels.job }}"
+      description: |
+        {{ $labels.container }} service has a 5xx rate greater than 25% for more than 3 mins.
+        Current error rate: {{ $value }}.
+        Top 5 URIs with 5xx errors in the last hour:
+        {{ range query (printf "topk(5, sum(increase(http_server_requests_seconds_count{container=\"%s\",status=~\"5..\"}[1h])) by (uri))" $labels.container) }}
+        - {{ .Labels.uri }}
+        {{ end }}
+
+# Only for nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking 5xx
+  - alert: "HTTP5XXErrorRate"
+    expr: |
+       100 * sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container=~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",status=~"5..",uri!~".*actuator.*"}[5m])) / sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container=~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",uri!~".*actuator.*"}[5m])) > 15
+    for: 3m
+    labels:
+      severity: critical
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP 5xx rate from {{ $labels.job }}"
+      description: |
+        {{ $labels.container }} service has a 5xx rate greater than 25% for more than 3 mins.
+        Current error rate: {{ $value }}.
+        Top 5 URIs with 5xx errors in the last hour:
+        {{ range query (printf "topk(5, sum(increase(http_server_requests_seconds_count{container=\"%s\",status=~\"5..\"}[1h])) by (uri))" $labels.container) }}
+        - {{ .Labels.uri }}
+        {{ end }}
+  - alert: "HTTP5XXErrorRate"
+    expr: |
+       100 * sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container=~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",status=~"5..",uri!~".*actuator.*"}[5m])) / sum by (container,job,cluster,namespace) (increase(http_server_requests_seconds_count{container=~"nc-api-gateway|nc-iam-service|ninjapay-service|logistics-tracking",exception!~"BadRequestException|RestRemoteException",uri!~".*actuator.*"}[5m])) > 25
+    for: 3m
+    labels:
+      severity: warning
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP 5xx rate from {{ $labels.job }}"
+      description: |
+        {{ $labels.container }} service has a 5xx rate greater than 25% for more than 3 mins.
+        Current error rate: {{ $value }}.
+        Top 5 URIs with 5xx errors in the last hour:
+        {{ range query (printf "topk(5, sum(increase(http_server_requests_seconds_count{container=\"%s\",status=~\"5..\"}[1h])) by (uri))" $labels.container) }}
+        - {{ .Labels.uri }}
+        {{ end }}
+#  4xx for all services
+  - alert: "HTTP4XXErrorRate"
+    expr: 100 * sum by (container,cluster,namespace,job) (increase(http_server_requests_seconds_count{status=~"4..",uri!~".*actuator.*", service!="nc-iam-service"}[5m])) / sum by (container,cluster,namespace,job) (increase(http_server_requests_seconds_count{uri!~".*actuator.*", service!="nc-iam-service"}[5m])) > 50
+    for: 5m
+    labels:
+      severity: warning
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP 4xx rate from {{ $labels.job }}"
+      description: |
+        {{ $labels.job }} service has a 4xx rate greater than 15% for more than 5 mins.
+        Current error rate: {{ $value }}.
+        Top 5 URIs with 4xx errors in the last hour:
+        {{ range query (printf "topk(5, sum(increase(http_server_requests_seconds_count{job=\"%s\",status=~\"4..\"}[1h])) by (uri))" $labels.job) }}
+        - {{ .Labels.uri }}
+        {{ end }}
+
+  - alert: "HTTP_TOO_MANY_REQUEST_WARNING"
+    expr: sum by (job,uri) (increase(http_server_requests_seconds_count{uri!~".*actuator.*|UNKNOWN"}[5m]))>20000
+    for: 5m
+    labels:
+      severity: warning
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP request on {{ $labels.job }} uri: {{ $labels.uri }} is {{ $value }}"
+      description: "{{ $labels.job }} service has more than 20 thousand request in 5 minute time"
+  
+  - alert: "HTTP_TOO_MANY_REQUEST_CRITICAL"
+    expr: sum by (job,uri) (increase(http_server_requests_seconds_count{uri!~".*actuator.*|UNKNOWN", job!="nc-events-api"}[5m]))>30000
+    for: 5m
+    labels:
+      severity: critical
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP request on {{ $labels.job }} uri: {{ $labels.uri }} is {{ $value }} "
+      description: "{{ $labels.job }} service has more than 30 thousand request in 5 minute time"
+  
+  - alert: "HTTP_TOO_MANY_REQUEST_CRITICAL"
+    expr: sum by (job,uri) (increase(http_server_requests_seconds_count{uri!~".*actuator.*|UNKNOWN", status!~"2..", job="nc-events-api"}[5m]))>30000
+    for: 5m
+    labels:
+      severity: critical
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP request on {{ $labels.job }} uri: {{ $labels.uri }} is {{ $value }} "
+      description: "{{ $labels.job }} service has more than 30 thousand request in 5 minute time"
+
+  - alert: "HighAPILatency"
+    expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri!~".*actuator.*"}[5m])) by (le, uri, job)) > 10
+    for: 5m
+    labels:
+      severity: warning
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High latency detected for {{ $labels.uri }} IN {{ $labels.job }} "
+      description: "The 95th percentile latency for {{ $labels.uri }} has exceeded 10 seconds. i.e. Requests on {{ $labels.job }} with URI {{ $labels.uri }} are taking more than 10 seconds to respond frequently over a 5-minute period."
+
+  # - alert: "HTTP4XXErrorRate"
+  #   expr: 100 * sum by (container,cluster,namespace,job) (increase(http_server_requests_seconds_count{status=~"4..",uri!~".*actuator.*"}[5m])) / sum by (container,cluster,namespace,job) (increase(http_server_requests_seconds_count{uri!~".*actuator.*"}[5m])) > 25
+  #   for: 5m
+  #   labels:
+  #     severity: critical
+  #     job: "{{ $labels.job }}"
+  #     type: service
+  #   annotations:
+  #     summary: "High HTTP 4xx rate from {{ $labels.job }}"
+  #     description: "{{ $labels.job }} service has 4xx rate greater than 25% for more than 5 mins"
+
+  - alert: "ServiceDown"
+    expr: sum by (container,namespace)(kube_pod_container_status_running{namespace!~"observe|renovate",container!~"hello|delete-restarted-pods|mastodon-prod-media-remove|run",cluster!~"dev|qa"}) == 0
+    for: 5m
+    labels:
+      job: "{{ $labels.job }}"
+      severity: critical
+      type: service
+    annotations:
+      summary: "Service down in namespace"
+      description: "Service {{ $labels.container}} in namespace {{ $labels.namespace }} has no running pods for more than 5 minutes."
+
+  # AWS ECS Application rules
+  - alert: "High5XXErrorRateInRiskService"
+    expr: sum by (job) (increase(http_server_requests_seconds_count{namespace="platform", service= "nc-risk-service", uri!~".*actuator.*", status=~"5.."}[5m])) >0
+    for: 3m
+    labels:
+      severity: critical
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High HTTP 5xx rate from {{ $labels.job }}"
+      description: " {{ $labels.job }} service has 5xx rate greater than 1 for more than 3 mins values: {{ $value }}"
+
+  - alert: HighRequestThroughputInRiskService
+    expr: sum(increase(http_server_requests_seconds_count{namespace="platform", service="nc-risk-service", uri!~"/actuator.*"}[5m])) by(uri,job) >100
+    for: 3m
+    labels:
+      severity: warning
+      job: "{{ $labels.job }}"
+      type: service
+    annotations:
+      summary: "High request throughput detected {{ $labels.job }}"
+      description: "The request throughput is {{ $value }} requests per 3 minutes, which exceeds the threshold of 100 requests."

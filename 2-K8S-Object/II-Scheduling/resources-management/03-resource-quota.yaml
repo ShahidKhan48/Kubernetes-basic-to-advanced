@@ -1,0 +1,291 @@
+# Basic Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: basic-resource-quota
+  namespace: default
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    
+    # Storage resources
+    requests.storage: 100Gi
+    persistentvolumeclaims: "10"
+    
+    # Object counts
+    pods: "20"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"
+    replicationcontrollers: "5"
+    
+    # Extended resources
+    count/deployments.apps: "10"
+    count/jobs.batch: "5"
+
+---
+# Production Environment Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "20"
+    requests.memory: 40Gi
+    limits.cpu: "40"
+    limits.memory: 80Gi
+    
+    # Storage resources
+    requests.storage: 1Ti
+    persistentvolumeclaims: "50"
+    
+    # Object counts
+    pods: "100"
+    services: "50"
+    secrets: "100"
+    configmaps: "100"
+    
+    # Workload objects
+    count/deployments.apps: "50"
+    count/statefulsets.apps: "10"
+    count/jobs.batch: "20"
+    count/cronjobs.batch: "10"
+    
+    # Network objects
+    count/ingresses.networking.k8s.io: "20"
+    count/networkpolicies.networking.k8s.io: "10"
+
+---
+# Development Environment Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: development-quota
+  namespace: development
+spec:
+  hard:
+    # Compute resources (limited for dev)
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    
+    # Storage resources
+    requests.storage: 200Gi
+    persistentvolumeclaims: "20"
+    
+    # Object counts
+    pods: "30"
+    services: "15"
+    secrets: "30"
+    configmaps: "30"
+    
+    # Workload objects
+    count/deployments.apps: "20"
+    count/statefulsets.apps: "5"
+    count/jobs.batch: "10"
+
+---
+# GPU Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-quota
+  namespace: gpu-workloads
+spec:
+  hard:
+    # GPU resources
+    requests.nvidia.com/gpu: "8"
+    limits.nvidia.com/gpu: "8"
+    
+    # Compute resources for GPU workloads
+    requests.cpu: "32"
+    requests.memory: 128Gi
+    limits.cpu: "64"
+    limits.memory: 256Gi
+    
+    # Storage for ML datasets
+    requests.storage: 2Ti
+    persistentvolumeclaims: "20"
+    
+    # Object counts
+    pods: "20"
+    count/jobs.batch: "10"
+
+---
+# Priority-based Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: high-priority-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    pods: "50"
+  scopes: ["PriorityClass"]
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values: ["high-priority"]
+
+---
+# QoS-based Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: besteffort-quota
+  namespace: default
+spec:
+  hard:
+    pods: "5"
+    count/deployments.apps: "3"
+  scopes: ["BestEffort"]
+
+---
+# Guaranteed QoS Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: guaranteed-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+  scopes: ["NotBestEffort"]
+
+---
+# Terminating vs Non-Terminating Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: terminating-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    pods: "10"
+  scopes: ["Terminating"]
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: non-terminating-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "6"
+    requests.memory: 12Gi
+    pods: "30"
+  scopes: ["NotTerminating"]
+
+---
+# Storage Class Specific Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ssd-storage-quota
+  namespace: default
+spec:
+  hard:
+    ssd.storageclass.storage.k8s.io/requests.storage: 500Gi
+    ssd.storageclass.storage.k8s.io/persistentvolumeclaims: "20"
+
+---
+# Comprehensive Multi-Scope Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: comprehensive-quota
+  namespace: production
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "50"
+    requests.memory: 100Gi
+    limits.cpu: "100"
+    limits.memory: 200Gi
+    
+    # Extended resources
+    requests.nvidia.com/gpu: "4"
+    limits.nvidia.com/gpu: "4"
+    
+    # Storage resources
+    requests.storage: 2Ti
+    persistentvolumeclaims: "100"
+    
+    # Object counts
+    pods: "200"
+    services: "100"
+    secrets: "200"
+    configmaps: "200"
+    
+    # Workload objects
+    count/deployments.apps: "100"
+    count/statefulsets.apps: "20"
+    count/daemonsets.apps: "10"
+    count/jobs.batch: "50"
+    count/cronjobs.batch: "20"
+    
+    # Network objects
+    count/services.loadbalancer: "10"
+    count/services.nodeport: "20"
+    count/ingresses.networking.k8s.io: "50"
+    
+    # RBAC objects
+    count/roles.rbac.authorization.k8s.io: "20"
+    count/rolebindings.rbac.authorization.k8s.io: "20"
+
+---
+# Team-based Resource Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-alpha-quota
+  namespace: team-alpha
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    requests.storage: 500Gi
+    persistentvolumeclaims: "30"
+    pods: "50"
+    services: "25"
+    count/deployments.apps: "25"
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-beta-quota
+  namespace: team-beta
+spec:
+  hard:
+    requests.cpu: "12"
+    requests.memory: 24Gi
+    limits.cpu: "24"
+    limits.memory: 48Gi
+    requests.storage: 1Ti
+    persistentvolumeclaims: "50"
+    pods: "75"
+    services: "40"
+    count/deployments.apps: "40"

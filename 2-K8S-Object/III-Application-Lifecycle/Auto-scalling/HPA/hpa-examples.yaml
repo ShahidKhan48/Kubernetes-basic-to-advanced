@@ -1,0 +1,141 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-app-hpa
+  labels:
+    app: web-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-app-deployment
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+      - type: Percent
+        value: 10    # Scale down by 10% max
+        periodSeconds: 60
+      - type: Pods
+        value: 2     # Or scale down by 2 pods max
+        periodSeconds: 60
+      selectPolicy: Min  # Use the more conservative policy
+    
+    scaleUp:
+      stabilizationWindowSeconds: 60   # 1 minute
+      policies:
+      - type: Percent
+        value: 50    # Scale up by 50% max
+        periodSeconds: 60
+      - type: Pods
+        value: 4     # Or scale up by 4 pods max
+        periodSeconds: 60
+      selectPolicy: Max  # Use the more aggressive policy
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-server-hpa
+  labels:
+    app: api-server
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-server
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+  # CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  
+  # Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70
+  
+  # Custom metric: HTTP requests per second
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  
+  # External metric: SQS queue length
+  - type: External
+    external:
+      metric:
+        name: sqs_queue_length
+        selector:
+          matchLabels:
+            queue: "order-processing"
+      target:
+        type: Value
+        value: "10"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: batch-worker-hpa
+  labels:
+    app: batch-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: batch-worker
+  minReplicas: 1
+  maxReplicas: 100
+  metrics:
+  # Scale based on queue length
+  - type: External
+    external:
+      metric:
+        name: redis_queue_length
+        selector:
+          matchLabels:
+            queue: "background-jobs"
+      target:
+        type: AverageValue
+        averageValue: "5"  # 5 jobs per pod
+  
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes - slow scale down
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 300  # 5 minutes
+    
+    scaleUp:
+      stabilizationWindowSeconds: 30   # 30 seconds - fast scale up
+      policies:
+      - type: Percent
+        value: 100   # Double the pods
+        periodSeconds: 60

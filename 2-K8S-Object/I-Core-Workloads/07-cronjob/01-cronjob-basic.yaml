@@ -1,0 +1,108 @@
+# Basic CronJob Examples
+
+---
+# Simple Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-cronjob
+  labels:
+    app: backup-system
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: backup-job
+        spec:
+          containers:
+          - name: backup
+            image: spicybiryaniwala.shop/backup:v1.0.0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting backup at $(date)"
+              sleep 30
+              echo "Backup completed at $(date)"
+            resources:
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+          restartPolicy: OnFailure
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+
+---
+# Database Cleanup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-cleanup
+spec:
+  schedule: "0 0 * * 0"  # Weekly on Sunday
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cleanup
+            image: postgres:13
+            env:
+            - name: PGHOST
+              value: "postgres.spicybiryaniwala.shop"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            command:
+            - /bin/bash
+            - -c
+            - |
+              psql -d myapp -c "DELETE FROM logs WHERE created_at < NOW() - INTERVAL '30 days';"
+              echo "Cleanup completed"
+          restartPolicy: OnFailure
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 2
+
+---
+# Report Generation CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: monthly-report
+spec:
+  schedule: "0 6 1 * *"  # First day of month at 6 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: report-generator
+            image: spicybiryaniwala.shop/report-gen:v2.0.0
+            env:
+            - name: REPORT_TYPE
+              value: "monthly"
+            - name: OUTPUT_PATH
+              value: "/reports"
+            volumeMounts:
+            - name: report-storage
+              mountPath: /reports
+          volumes:
+          - name: report-storage
+            persistentVolumeClaim:
+              claimName: report-pvc
+          restartPolicy: Never
+  concurrencyPolicy: Replace

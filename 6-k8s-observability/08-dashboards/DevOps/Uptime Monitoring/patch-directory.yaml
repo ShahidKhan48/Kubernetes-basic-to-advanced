@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-uptime-monitoring-uptime-kuma-sla-latency-certs
+  annotations:
+    grafana_folder: "DevOps/Uptime Monitoring"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-uptime-monitoring-uptime-kuma-status
+  annotations:
+    grafana_folder: "DevOps/Uptime Monitoring"
+---
+

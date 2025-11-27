@@ -1,0 +1,417 @@
+# Validating Admission Webhook for Pod Security
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionWebhook
+metadata:
+  name: pod-security-validator
+webhooks:
+- name: pod-security.example.com
+  clientConfig:
+    service:
+      name: pod-security-webhook
+      namespace: webhook-system
+      path: "/validate-pods"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  namespaceSelector:
+    matchLabels:
+      webhook: "enabled"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Fail
+  timeoutSeconds: 10
+
+---
+# Mutating Admission Webhook for Resource Injection
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionWebhook
+metadata:
+  name: resource-injector
+webhooks:
+- name: resource-injector.example.com
+  clientConfig:
+    service:
+      name: resource-injector-webhook
+      namespace: webhook-system
+      path: "/mutate-pods"
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  namespaceSelector:
+    matchLabels:
+      resource-injection: "enabled"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Fail
+  timeoutSeconds: 5
+
+---
+# Validating Webhook for Deployment Policies
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionWebhook
+metadata:
+  name: deployment-policy-validator
+webhooks:
+- name: deployment-policy.example.com
+  clientConfig:
+    service:
+      name: deployment-policy-webhook
+      namespace: webhook-system
+      path: "/validate-deployments"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["apps"]
+    apiVersions: ["v1"]
+    resources: ["deployments"]
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Fail
+
+---
+# Mutating Webhook for Sidecar Injection
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionWebhook
+metadata:
+  name: sidecar-injector
+webhooks:
+- name: sidecar-injector.example.com
+  clientConfig:
+    service:
+      name: sidecar-injector-webhook
+      namespace: webhook-system
+      path: "/inject-sidecar"
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  namespaceSelector:
+    matchLabels:
+      sidecar-injection: "enabled"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Ignore
+
+---
+# Webhook Service for Pod Security Validator
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-security-webhook
+  namespace: webhook-system
+  labels:
+    app: pod-security-webhook
+spec:
+  selector:
+    app: pod-security-webhook
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 8443
+    protocol: TCP
+
+---
+# Webhook Deployment for Pod Security Validator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-security-webhook
+  namespace: webhook-system
+  labels:
+    app: pod-security-webhook
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pod-security-webhook
+  template:
+    metadata:
+      labels:
+        app: pod-security-webhook
+    spec:
+      serviceAccountName: pod-security-webhook
+      containers:
+      - name: webhook
+        image: pod-security-webhook:v1.0.0
+        ports:
+        - containerPort: 8443
+          name: webhook
+        env:
+        - name: TLS_CERT_FILE
+          value: "/etc/certs/tls.crt"
+        - name: TLS_PRIVATE_KEY_FILE
+          value: "/etc/certs/tls.key"
+        - name: WEBHOOK_PORT
+          value: "8443"
+        volumeMounts:
+        - name: certs
+          mountPath: /etc/certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: certs
+        secret:
+          secretName: webhook-certs
+
+---
+# ServiceAccount for Webhook
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-security-webhook
+  namespace: webhook-system
+
+---
+# ClusterRole for Webhook
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pod-security-webhook
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding for Webhook
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pod-security-webhook
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pod-security-webhook
+subjects:
+- kind: ServiceAccount
+  name: pod-security-webhook
+  namespace: webhook-system
+
+---
+# Resource Injector Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: resource-injector-webhook
+  namespace: webhook-system
+spec:
+  selector:
+    app: resource-injector-webhook
+  ports:
+  - port: 443
+    targetPort: 8443
+
+---
+# Resource Injector Webhook Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-injector-webhook
+  namespace: webhook-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: resource-injector-webhook
+  template:
+    metadata:
+      labels:
+        app: resource-injector-webhook
+    spec:
+      serviceAccountName: resource-injector-webhook
+      containers:
+      - name: webhook
+        image: resource-injector:v1.0.0
+        ports:
+        - containerPort: 8443
+        env:
+        - name: TLS_CERT_FILE
+          value: "/etc/certs/tls.crt"
+        - name: TLS_PRIVATE_KEY_FILE
+          value: "/etc/certs/tls.key"
+        - name: DEFAULT_CPU_REQUEST
+          value: "100m"
+        - name: DEFAULT_MEMORY_REQUEST
+          value: "128Mi"
+        - name: DEFAULT_CPU_LIMIT
+          value: "500m"
+        - name: DEFAULT_MEMORY_LIMIT
+          value: "512Mi"
+        volumeMounts:
+        - name: certs
+          mountPath: /etc/certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: certs
+        secret:
+          secretName: resource-injector-certs
+
+---
+# ServiceAccount for Resource Injector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: resource-injector-webhook
+  namespace: webhook-system
+
+---
+# Sidecar Injector Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: sidecar-injector-webhook
+  namespace: webhook-system
+spec:
+  selector:
+    app: sidecar-injector-webhook
+  ports:
+  - port: 443
+    targetPort: 8443
+
+---
+# Sidecar Injector Webhook Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sidecar-injector-webhook
+  namespace: webhook-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sidecar-injector-webhook
+  template:
+    metadata:
+      labels:
+        app: sidecar-injector-webhook
+    spec:
+      serviceAccountName: sidecar-injector-webhook
+      containers:
+      - name: webhook
+        image: sidecar-injector:v1.0.0
+        ports:
+        - containerPort: 8443
+        env:
+        - name: TLS_CERT_FILE
+          value: "/etc/certs/tls.crt"
+        - name: TLS_PRIVATE_KEY_FILE
+          value: "/etc/certs/tls.key"
+        - name: SIDECAR_IMAGE
+          value: "fluent/fluent-bit:latest"
+        - name: SIDECAR_CPU_REQUEST
+          value: "50m"
+        - name: SIDECAR_MEMORY_REQUEST
+          value: "64Mi"
+        volumeMounts:
+        - name: certs
+          mountPath: /etc/certs
+          readOnly: true
+        - name: sidecar-config
+          mountPath: /etc/sidecar
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: certs
+        secret:
+          secretName: sidecar-injector-certs
+      - name: sidecar-config
+        configMap:
+          name: sidecar-config
+
+---
+# ServiceAccount for Sidecar Injector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sidecar-injector-webhook
+  namespace: webhook-system
+
+---
+# Sidecar Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar-config
+  namespace: webhook-system
+data:
+  sidecar-template.yaml: |
+    name: logging-sidecar
+    image: fluent/fluent-bit:latest
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
+      readOnly: true
+
+---
+# Network Policy for Webhook System
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook-system-netpol
+  namespace: webhook-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8443
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: UDP
+      port: 53

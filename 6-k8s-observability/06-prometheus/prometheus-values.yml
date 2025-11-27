@@ -1,0 +1,433 @@
+# Prometheus Helm Chart Values
+# Chart Version: 27.45.0
+# App Version: v3.7.3
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# Prometheus server configuration
+server:
+  enabled: true
+  
+  # Image configuration
+  image:
+    repository: prom/prometheus
+    tag: "v3.7.3"
+    pullPolicy: IfNotPresent
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    servicePort: 80
+    targetPort: 9090
+    annotations: {}
+  
+  # Ingress configuration (disabled by default)
+  ingress:
+    enabled: false
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: prometheus.spicybiryaniwala.shop
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: prometheus-tls
+        hosts:
+          - prometheus.spicybiryaniwala.shop
+  
+  # Persistence configuration
+  persistentVolume:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    mountPath: /data
+    subPath: ""
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  # Replica configuration
+  replicaCount: 1
+  
+  # Security context
+  securityContext:
+    runAsUser: 65534
+    runAsNonRoot: true
+    runAsGroup: 65534
+    fsGroup: 65534
+  
+  # Node selector
+  nodeSelector: {}
+  
+  # Tolerations
+  tolerations: []
+  
+  # Affinity
+  affinity: {}
+  
+  # Pod annotations
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+  
+  # Pod labels
+  podLabels:
+    app: prometheus
+    component: server
+  
+  # Retention configuration
+  retention: "15d"
+  retentionSize: "10GB"
+  
+  # Configuration
+  global:
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    evaluation_interval: 60s
+    external_labels:
+      cluster: spicybiryaniwala-cluster
+      replica: prometheus
+  
+  # Remote write configuration (to Mimir)
+  remoteWrite:
+    - url: http://mimir-nginx:80/api/v1/push
+      headers:
+        X-Scope-OrgID: prometheus-metrics
+      queue_config:
+        capacity: 10000
+        min_shards: 1
+        max_shards: 50
+        max_samples_per_send: 2000
+        batch_send_deadline: 5s
+        min_backoff: 30ms
+        max_backoff: 5s
+        retry_on_http_429: true
+  
+  # Remote read configuration (from Mimir)
+  remoteRead:
+    - url: http://mimir-nginx:80/prometheus/api/v1/read
+      headers:
+        X-Scope-OrgID: prometheus-metrics
+      read_recent: true
+  
+  # Alerting configuration
+  alerting:
+    alertmanagers:
+      - static_configs:
+          - targets:
+            - prometheus-alertmanager:9093
+  
+  # Rule files
+  ruleFiles:
+    - /etc/config/recording_rules.yml
+    - /etc/config/alerting_rules.yml
+  
+  # Additional scrape configs
+  extraScrapeConfigs: |
+    # Scrape Grafana metrics
+    - job_name: 'grafana'
+      static_configs:
+        - targets: ['grafana:3000']
+      metrics_path: /metrics
+      scrape_interval: 60s
+    
+    # Scrape Mimir metrics
+    - job_name: 'mimir'
+      static_configs:
+        - targets: ['mimir-nginx:80']
+      metrics_path: /metrics
+      scrape_interval: 60s
+    
+    # Scrape Loki metrics
+    - job_name: 'loki'
+      static_configs:
+        - targets: ['loki-gateway:80']
+      metrics_path: /metrics
+      scrape_interval: 60s
+    
+    # Scrape Tempo metrics
+    - job_name: 'tempo'
+      static_configs:
+        - targets: ['tempo-query-frontend:3200']
+      metrics_path: /metrics
+      scrape_interval: 60s
+
+# Alertmanager configuration
+alertmanager:
+  enabled: true
+  
+  # Image configuration
+  image:
+    repository: prom/alertmanager
+    tag: "v0.27.0"
+    pullPolicy: IfNotPresent
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    servicePort: 9093
+    targetPort: 9093
+  
+  # Persistence configuration
+  persistentVolume:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Replica configuration
+  replicaCount: 1
+  
+  # Configuration
+  config:
+    global:
+      smtp_smarthost: 'localhost:587'
+      smtp_from: 'alertmanager@spicybiryaniwala.shop'
+    
+    route:
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'web.hook'
+    
+    receivers:
+      - name: 'web.hook'
+        webhook_configs:
+          - url: 'http://localhost:5001/'
+            send_resolved: true
+
+# Kube State Metrics configuration
+kube-state-metrics:
+  enabled: true
+  
+  # Image configuration
+  image:
+    repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+    tag: "v2.13.0"
+    pullPolicy: IfNotPresent
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8080"
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Node selector
+  nodeSelector:
+    kubernetes.io/os: linux
+  
+  # Security context
+  securityContext:
+    enabled: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+
+# Node Exporter configuration
+prometheus-node-exporter:
+  enabled: true
+  
+  # Image configuration
+  image:
+    repository: prom/node-exporter
+    tag: "v1.8.2"
+    pullPolicy: IfNotPresent
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9100
+    targetPort: 9100
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9100"
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  
+  # Host network and PID
+  hostNetwork: true
+  hostPID: true
+  
+  # Node selector
+  nodeSelector:
+    kubernetes.io/os: linux
+  
+  # Tolerations
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+  
+  # Pod annotations
+  podAnnotations:
+    k8s.grafana.com/logs.job: integrations/node_exporter
+
+# Pushgateway configuration
+prometheus-pushgateway:
+  enabled: true
+  
+  # Image configuration
+  image:
+    repository: prom/pushgateway
+    tag: "v1.9.0"
+    pullPolicy: IfNotPresent
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9091
+    targetPort: 9091
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  
+  # Replica configuration
+  replicaCount: 1
+  
+  # Persistence configuration
+  persistentVolume:
+    enabled: false
+
+# Service account configuration
+serviceAccounts:
+  server:
+    create: true
+    name: prometheus-server
+    annotations: {}
+  
+  alertmanager:
+    create: true
+    name: prometheus-alertmanager
+    annotations: {}
+  
+  pushgateway:
+    create: true
+    name: prometheus-pushgateway
+    annotations: {}
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Pod Security Policy (deprecated)
+podSecurityPolicy:
+  enabled: false
+
+# Network Policy
+networkPolicy:
+  enabled: false
+
+# Extra manifests
+extraManifests: []
+
+# Server configuration files
+serverFiles:
+  # Recording rules
+  recording_rules.yml:
+    groups:
+      - name: kubernetes-recording-rules
+        interval: 30s
+        rules:
+          - record: cluster:namespace:pod_memory:active:kube_pod_container_resource_requests
+            expr: |
+              kube_pod_container_resource_requests{resource="memory"} * on (namespace, pod)
+              group_left() max by (namespace, pod) (
+                kube_pod_status_phase{phase=~"Pending|Running"} == 1
+              )
+          
+          - record: cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests
+            expr: |
+              kube_pod_container_resource_requests{resource="cpu"} * on (namespace, pod)
+              group_left() max by (namespace, pod) (
+                kube_pod_status_phase{phase=~"Pending|Running"} == 1
+              )
+  
+  # Alerting rules
+  alerting_rules.yml:
+    groups:
+      - name: kubernetes-alerts
+        rules:
+          - alert: KubePodCrashLooping
+            expr: |
+              max_over_time(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff", job="kube-state-metrics"}[5m]) >= 1
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: Pod {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) is in waiting state (reason: "CrashLoopBackOff").
+              description: 'Pod {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) is in waiting state (reason: "CrashLoopBackOff").'
+          
+          - alert: KubePodNotReady
+            expr: |
+              sum by (namespace, pod, cluster) (
+                max by(namespace, pod, cluster) (
+                  kube_pod_status_phase{job="kube-state-metrics", phase=~"Pending|Unknown|Failed"}
+                ) * on(namespace, pod, cluster) group_left(owner_kind) topk by(namespace, pod, cluster) (
+                  1, max by(namespace, pod, owner_kind, cluster) (kube_pod_owner{owner_kind!="Job"})
+                )
+              ) > 0
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: Pod has been in a non-ready state for more than 15 minutes.
+              description: 'Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-ready state for longer than 15 minutes.'
+          
+          - alert: KubeNodeNotReady
+            expr: |
+              kube_node_status_condition{job="kube-state-metrics",condition="Ready",status="true"} == 0
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: Node is not ready.
+              description: '{{ $labels.node }} has been unready for more than 15 minutes.'

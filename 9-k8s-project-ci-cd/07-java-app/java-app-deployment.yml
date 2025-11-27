@@ -1,0 +1,311 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app
+  namespace: monitoring
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-app
+  template:
+    metadata:
+      labels:
+        app: java-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+      - name: java-app
+        image: openjdk:17-jdk-slim
+        command:
+        - java
+        - -javaagent:/app/opentelemetry-javaagent.jar
+        - -Dotel.service.name=java-app
+        - -Dotel.exporter.otlp.endpoint=http://alloy:4317
+        - -Dotel.exporter.otlp.protocol=grpc
+        - -Dotel.logs.exporter=otlp
+        - -Dotel.metrics.exporter=otlp
+        - -Dotel.traces.exporter=otlp
+        - -jar
+        - /app/app.jar
+        ports:
+        - containerPort: 8080
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: "java-app"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://alloy:4317"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "grpc"
+        - name: OTEL_LOGS_EXPORTER
+          value: "otlp"
+        - name: OTEL_METRICS_EXPORTER
+          value: "otlp"
+        - name: OTEL_TRACES_EXPORTER
+          value: "otlp"
+        volumeMounts:
+        - name: app-jar
+          mountPath: /app
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      initContainers:
+      - name: app-builder
+        image: maven:3.8.6-openjdk-17
+        command:
+        - sh
+        - -c
+        - |
+          cd /workspace
+          cat > pom.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+                   http://maven.apache.org/xsd/maven-4.0.0.xsd">
+              <modelVersion>4.0.0</modelVersion>
+              <parent>
+                  <groupId>org.springframework.boot</groupId>
+                  <artifactId>spring-boot-starter-parent</artifactId>
+                  <version>3.1.0</version>
+                  <relativePath/>
+              </parent>
+              <groupId>com.example</groupId>
+              <artifactId>monitoring-demo</artifactId>
+              <version>1.0.0</version>
+              <properties>
+                  <java.version>17</java.version>
+              </properties>
+              <dependencies>
+                  <dependency>
+                      <groupId>org.springframework.boot</groupId>
+                      <artifactId>spring-boot-starter-web</artifactId>
+                  </dependency>
+                  <dependency>
+                      <groupId>org.springframework.boot</groupId>
+                      <artifactId>spring-boot-starter-actuator</artifactId>
+                  </dependency>
+                  <dependency>
+                      <groupId>io.micrometer</groupId>
+                      <artifactId>micrometer-registry-prometheus</artifactId>
+                  </dependency>
+                  <dependency>
+                      <groupId>io.opentelemetry</groupId>
+                      <artifactId>opentelemetry-api</artifactId>
+                      <version>1.28.0</version>
+                  </dependency>
+              </dependencies>
+              <build>
+                  <plugins>
+                      <plugin>
+                          <groupId>org.springframework.boot</groupId>
+                          <artifactId>spring-boot-maven-plugin</artifactId>
+                      </plugin>
+                  </plugins>
+              </build>
+          </project>
+          EOF
+          
+          mkdir -p src/main/java/com/example/demo
+          cat > src/main/java/com/example/demo/DemoApplication.java << 'EOF'
+          package com.example.demo;
+          
+          import org.springframework.boot.SpringApplication;
+          import org.springframework.boot.autoconfigure.SpringBootApplication;
+          import org.springframework.web.bind.annotation.*;
+          import org.springframework.beans.factory.annotation.Autowired;
+          import io.micrometer.core.instrument.Counter;
+          import io.micrometer.core.instrument.MeterRegistry;
+          import io.micrometer.core.instrument.Timer;
+          import io.opentelemetry.api.trace.Tracer;
+          import io.opentelemetry.api.trace.Span;
+          import io.opentelemetry.api.GlobalOpenTelemetry;
+          import org.slf4j.Logger;
+          import org.slf4j.LoggerFactory;
+          import java.util.Random;
+          import java.util.concurrent.TimeUnit;
+          
+          @SpringBootApplication
+          @RestController
+          public class DemoApplication {
+              
+              private static final Logger logger = LoggerFactory.getLogger(DemoApplication.class);
+              private final Counter requestCounter;
+              private final Timer requestTimer;
+              private final Tracer tracer;
+              private final Random random = new Random();
+              
+              @Autowired
+              public DemoApplication(MeterRegistry meterRegistry) {
+                  this.requestCounter = Counter.builder("http_requests_total")
+                      .description("Total HTTP requests")
+                      .register(meterRegistry);
+                  this.requestTimer = Timer.builder("http_request_duration_seconds")
+                      .description("HTTP request duration")
+                      .register(meterRegistry);
+                  this.tracer = GlobalOpenTelemetry.getTracer("java-app");
+              }
+              
+              public static void main(String[] args) {
+                  SpringApplication.run(DemoApplication.class, args);
+              }
+              
+              @GetMapping("/")
+              public String home() {
+                  return requestTimer.recordCallable(() -> {
+                      Span span = tracer.spanBuilder("home-request").startSpan();
+                      try {
+                          requestCounter.increment();
+                          logger.info("Home endpoint accessed");
+                          
+                          // Simulate some work
+                          Thread.sleep(random.nextInt(100));
+                          
+                          return "Hello from Java App! Monitoring is working.";
+                      } catch (Exception e) {
+                          logger.error("Error in home endpoint", e);
+                          throw new RuntimeException(e);
+                      } finally {
+                          span.end();
+                      }
+                  });
+              }
+              
+              @GetMapping("/api/users/{id}")
+              public String getUser(@PathVariable String id) {
+                  return requestTimer.recordCallable(() -> {
+                      Span span = tracer.spanBuilder("get-user").startSpan();
+                      try {
+                          requestCounter.increment();
+                          logger.info("Getting user with id: {}", id);
+                          
+                          // Simulate database call
+                          Thread.sleep(random.nextInt(200));
+                          
+                          return String.format("User %s details", id);
+                      } catch (Exception e) {
+                          logger.error("Error getting user {}", id, e);
+                          throw new RuntimeException(e);
+                      } finally {
+                          span.end();
+                      }
+                  });
+              }
+              
+              @PostMapping("/api/orders")
+              public String createOrder(@RequestBody String order) {
+                  return requestTimer.recordCallable(() -> {
+                      Span span = tracer.spanBuilder("create-order").startSpan();
+                      try {
+                          requestCounter.increment();
+                          logger.info("Creating order: {}", order);
+                          
+                          // Simulate order processing
+                          Thread.sleep(random.nextInt(300));
+                          
+                          // Randomly fail some requests for demo
+                          if (random.nextInt(10) == 0) {
+                              logger.error("Order creation failed");
+                              throw new RuntimeException("Order processing failed");
+                          }
+                          
+                          return "Order created successfully";
+                      } catch (Exception e) {
+                          logger.error("Error creating order", e);
+                          throw e;
+                      } finally {
+                          span.end();
+                      }
+                  });
+              }
+              
+              @GetMapping("/health")
+              public String health() {
+                  return "OK";
+              }
+          }
+          EOF
+          
+          cat > src/main/resources/application.yml << 'EOF'
+          server:
+            port: 8080
+          
+          management:
+            endpoints:
+              web:
+                exposure:
+                  include: health,info,prometheus,metrics
+            endpoint:
+              health:
+                show-details: always
+          
+          logging:
+            level:
+              com.example.demo: INFO
+            pattern:
+              console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+          EOF
+          
+          mvn clean package -DskipTests
+          cp target/*.jar /app/app.jar
+          
+          # Download OpenTelemetry Java agent
+          curl -L -o /app/opentelemetry-javaagent.jar \
+            https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar
+        volumeMounts:
+        - name: app-jar
+          mountPath: /app
+        - name: workspace
+          mountPath: /workspace
+      volumes:
+      - name: app-jar
+        emptyDir: {}
+      - name: workspace
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app
+  namespace: monitoring
+spec:
+  selector:
+    app: java-app
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app-loadbalancer
+  namespace: monitoring
+spec:
+  selector:
+    app: java-app
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: LoadBalancer

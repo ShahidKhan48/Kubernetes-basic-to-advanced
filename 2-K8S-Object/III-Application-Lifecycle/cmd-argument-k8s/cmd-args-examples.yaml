@@ -1,0 +1,116 @@
+# Command and Arguments Examples
+
+---
+# Basic Command Override
+apiVersion: v1
+kind: Pod
+metadata:
+  name: basic-command
+  labels:
+    app: command-demo
+spec:
+  containers:
+  - name: demo
+    image: busybox:1.35
+    command: ["/bin/sh"]
+    args: ["-c", "echo 'Hello from spicybiryaniwala.shop' && sleep 60"]
+  restartPolicy: Never
+
+---
+# Environment Variables in Commands
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-command
+spec:
+  containers:
+  - name: app
+    image: alpine:3.16
+    env:
+    - name: APP_NAME
+      value: "SpicyBiryaniWala"
+    - name: VERSION
+      value: "v1.0.0"
+    - name: ENVIRONMENT
+      value: "production"
+    command: ["/bin/sh"]
+    args:
+    - -c
+    - |
+      echo "Application: $APP_NAME"
+      echo "Version: $VERSION"
+      echo "Environment: $ENVIRONMENT"
+      echo "Starting at: $(date)"
+      sleep 120
+  restartPolicy: Never
+
+---
+# Multi-step Initialization
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-step-init
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.21
+    command: ["/bin/bash"]
+    args:
+    - -c
+    - |
+      echo "Initializing web server..."
+      echo "<h1>Welcome to SpicyBiryaniWala.shop</h1>" > /usr/share/nginx/html/index.html
+      echo "<p>Server started at: $(date)</p>" >> /usr/share/nginx/html/index.html
+      echo "Starting nginx..."
+      nginx -g 'daemon off;'
+    ports:
+    - containerPort: 80
+
+---
+# Database Setup with Commands
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-setup
+spec:
+  containers:
+  - name: postgres
+    image: postgres:13
+    env:
+    - name: POSTGRES_DB
+      value: "spicybiryani"
+    - name: POSTGRES_USER
+      value: "admin"
+    - name: POSTGRES_PASSWORD
+      value: "secure123"
+    command: ["/bin/bash"]
+    args:
+    - -c
+    - |
+      echo "Setting up database..."
+      docker-entrypoint.sh postgres &
+      sleep 10
+      psql -U admin -d spicybiryani -c "CREATE TABLE IF NOT EXISTS orders (id SERIAL PRIMARY KEY, item VARCHAR(100), quantity INT);"
+      echo "Database setup completed"
+      wait
+
+---
+# Debugging Container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-container
+spec:
+  containers:
+  - name: debug
+    image: ubuntu:20.04
+    command: ["/bin/bash"]
+    args:
+    - -c
+    - |
+      apt-get update
+      apt-get install -y curl wget net-tools dnsutils
+      echo "Debug tools installed"
+      echo "Container ready for debugging"
+      sleep infinity
+  restartPolicy: Never

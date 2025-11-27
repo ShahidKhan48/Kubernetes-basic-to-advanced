@@ -1,0 +1,75 @@
+# LoadBalancer Service Examples
+
+---
+# Basic LoadBalancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-loadbalancer
+  labels:
+    app: web-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  - name: https
+    port: 443
+    targetPort: 8443
+
+---
+# AWS NLB LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: aws-nlb-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  externalTrafficPolicy: Local
+
+---
+# Internal LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: internal-lb
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: internal-app
+  ports:
+  - port: 8080
+    targetPort: 8080
+
+---
+# LoadBalancer with Health Checks
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-checked-lb
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/health"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "30"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+spec:
+  type: LoadBalancer
+  selector:
+    app: monitored-app
+  ports:
+  - port: 80
+    targetPort: 8080

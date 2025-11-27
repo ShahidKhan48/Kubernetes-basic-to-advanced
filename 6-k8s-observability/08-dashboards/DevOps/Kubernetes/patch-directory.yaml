@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-kubelet
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-cluster-ram-and-cpu-utilization
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-prometheus-adon
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-k8s-multi-cluster
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-views-global
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-compute-resources-multi-cluster
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-views-pods
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-cluster-monitoring-via-prometheus
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-system-api-server
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-views-namespaces
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-system-coredns
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-oom-and-restarts
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-views-nodes
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-kubernetes-kubernetes-persistent-volumes
+  annotations:
+    grafana_folder: "DevOps/Kubernetes"
+---
+

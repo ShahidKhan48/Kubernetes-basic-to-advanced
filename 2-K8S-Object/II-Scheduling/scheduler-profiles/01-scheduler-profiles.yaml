@@ -1,0 +1,382 @@
+# Multi-Profile Scheduler Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multi-profile-scheduler-config
+  namespace: kube-system
+data:
+  config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    kind: KubeSchedulerConfiguration
+    profiles:
+    # Default profile for general workloads
+    - schedulerName: default-scheduler
+      plugins:
+        queueSort:
+          enabled:
+          - name: PrioritySort
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+          - name: PodTopologySpread
+          - name: TaintToleration
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+          - name: PodTopologySpread
+          - name: NodeResourcesBalancedAllocation
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: LeastAllocated
+    
+    # High-performance profile for CPU-intensive workloads
+    - schedulerName: high-performance-scheduler
+      plugins:
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+          disabled:
+          - name: NodeResourcesBalancedAllocation
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated
+            resources:
+            - name: cpu
+              weight: 100
+    
+    # GPU-optimized profile
+    - schedulerName: gpu-scheduler
+      plugins:
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated
+            resources:
+            - name: nvidia.com/gpu
+              weight: 100
+            - name: cpu
+              weight: 50
+            - name: memory
+              weight: 50
+    
+    # Memory-optimized profile
+    - schedulerName: memory-scheduler
+      plugins:
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated
+            resources:
+            - name: memory
+              weight: 100
+            - name: cpu
+              weight: 30
+    
+    # Batch processing profile
+    - schedulerName: batch-scheduler
+      plugins:
+        queueSort:
+          enabled:
+          - name: PrioritySort
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: LeastAllocated
+    
+    # Spread-focused profile for high availability
+    - schedulerName: spread-scheduler
+      plugins:
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+          - name: PodTopologySpread
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: PodTopologySpread
+          - name: NodeAffinity
+          disabled:
+          - name: NodeResourcesBalancedAllocation
+      pluginConfig:
+      - name: PodTopologySpread
+        args:
+          defaultConstraints:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: ScheduleAnyway
+
+---
+# Multi-Profile Scheduler Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-profile-scheduler
+  namespace: kube-system
+  labels:
+    app: multi-profile-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multi-profile-scheduler
+  template:
+    metadata:
+      labels:
+        app: multi-profile-scheduler
+    spec:
+      serviceAccountName: multi-profile-scheduler
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.28.0
+        command:
+        - kube-scheduler
+        - --config=/etc/kubernetes/config.yaml
+        - --v=2
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: multi-profile-scheduler-config
+
+---
+# ServiceAccount for Multi-Profile Scheduler
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multi-profile-scheduler
+  namespace: kube-system
+
+---
+# ClusterRoleBinding for Multi-Profile Scheduler
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-profile-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: multi-profile-scheduler
+  namespace: kube-system
+
+---
+# Example Workloads Using Different Profiles
+
+# High-Performance CPU Workload
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-intensive-app
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cpu-intensive
+  template:
+    metadata:
+      labels:
+        app: cpu-intensive
+    spec:
+      schedulerName: high-performance-scheduler
+      containers:
+      - name: cpu-app
+        image: nginx:alpine
+        resources:
+          requests:
+            cpu: "2000m"
+            memory: "1Gi"
+          limits:
+            cpu: "4000m"
+            memory: "2Gi"
+
+---
+# GPU Workload
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-workload
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gpu-workload
+  template:
+    metadata:
+      labels:
+        app: gpu-workload
+    spec:
+      schedulerName: gpu-scheduler
+      containers:
+      - name: gpu-app
+        image: tensorflow/tensorflow:latest-gpu
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "1000m"
+            memory: "2Gi"
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "2000m"
+            memory: "4Gi"
+
+---
+# Memory-Intensive Workload
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: memory-intensive-db
+  namespace: default
+spec:
+  serviceName: memory-db
+  replicas: 3
+  selector:
+    matchLabels:
+      app: memory-db
+  template:
+    metadata:
+      labels:
+        app: memory-db
+    spec:
+      schedulerName: memory-scheduler
+      containers:
+      - name: redis
+        image: redis:alpine
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "500m"
+          limits:
+            memory: "8Gi"
+            cpu: "1000m"
+
+---
+# Batch Processing Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processing
+  namespace: default
+spec:
+  completions: 10
+  parallelism: 5
+  template:
+    metadata:
+      labels:
+        app: batch-job
+    spec:
+      schedulerName: batch-scheduler
+      restartPolicy: Never
+      containers:
+      - name: batch-processor
+        image: busybox:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Processing batch job..."
+          sleep 120
+          echo "Batch processing completed"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+
+---
+# High Availability Web Application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ha-web-app
+  namespace: default
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: ha-web-app
+  template:
+    metadata:
+      labels:
+        app: ha-web-app
+    spec:
+      schedulerName: spread-scheduler
+      containers:
+      - name: web-app
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: ha-web-app
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: ha-web-app

@@ -1,0 +1,183 @@
+# Pod with Tolerations for Master Node
+apiVersion: v1
+kind: Pod
+metadata:
+  name: master-toleration-pod
+  namespace: default
+spec:
+  tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+
+---
+# Pod with Specific Taint Toleration
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-toleration-pod
+  namespace: default
+spec:
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+  - key: dedicated
+    operator: Equal
+    value: "gpu-workload"
+    effect: NoExecute
+    tolerationSeconds: 3600
+  containers:
+  - name: gpu-app
+    image: tensorflow/tensorflow:latest-gpu
+    resources:
+      requests:
+        nvidia.com/gpu: 1
+
+---
+# Deployment with Multiple Tolerations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system-deployment
+  namespace: kube-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: system-app
+  template:
+    metadata:
+      labels:
+        app: system-app
+    spec:
+      tolerations:
+      # Tolerate all taints
+      - operator: Exists
+      # Or specific tolerations
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      containers:
+      - name: system-app
+        image: busybox:latest
+        command: ['sleep', '3600']
+
+---
+# DaemonSet with Tolerations (runs on all nodes)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-collector-daemonset
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: log-collector
+  template:
+    metadata:
+      labels:
+        app: log-collector
+    spec:
+      tolerations:
+      # Tolerate all taints to run on every node
+      - operator: Exists
+      containers:
+      - name: log-collector
+        image: fluent/fluent-bit:latest
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+
+---
+# Pod with NoExecute Toleration
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-execute-toleration-pod
+  namespace: default
+spec:
+  tolerations:
+  - key: maintenance
+    operator: Equal
+    value: "true"
+    effect: NoExecute
+    tolerationSeconds: 1800  # Stay for 30 minutes
+  containers:
+  - name: app
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+
+---
+# StatefulSet with Dedicated Node Tolerations
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: database-statefulset
+  namespace: default
+spec:
+  serviceName: database-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: "database"
+        effect: NoSchedule
+      - key: storage-optimized
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"

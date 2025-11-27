@@ -1,0 +1,22 @@
+# Basic Pod Manifest
+apiVersion: v1
+kind: Pod
+metadata:
+  name: basic-pod
+  namespace: default
+  labels:
+    app: basic-app
+    version: v1
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"

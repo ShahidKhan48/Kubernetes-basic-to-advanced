@@ -1,0 +1,22 @@
+apiVersion: v2
+name: mimir-distributed
+description: Grafana Mimir for long-term metrics storage
+type: application
+version: 6.0.3
+appVersion: 3.0.0
+home: https://grafana.com/oss/mimir/
+sources:
+  - https://github.com/grafana/mimir
+  - https://github.com/grafana/helm-charts
+keywords:
+  - monitoring
+  - metrics
+  - prometheus
+  - tsdb
+maintainers:
+  - name: Grafana Labs
+    url: https://grafana.com
+dependencies:
+  - name: mimir-distributed
+    version: 6.0.3
+    repository: https://grafana.github.io/helm-charts

@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-filesystem-and-disks
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-overview
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-network
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-logs
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-fleet-overview
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-cpu-and-system
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-linux-node-linux-node-memory
+  annotations:
+    grafana_folder: "DevOps/Linux Node"
+---
+

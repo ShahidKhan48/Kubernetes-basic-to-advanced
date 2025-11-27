@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-prometheus-prometheus-metrics
+  annotations:
+    grafana_folder: "DevOps/Prometheus"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-prometheus-prometheus-alertmanager
+  annotations:
+    grafana_folder: "DevOps/Prometheus"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-prometheus-monitoring-prometheus-cardinality-metrics
+  annotations:
+    grafana_folder: "DevOps/Prometheus"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-prometheus-prometheus-2-22
+  annotations:
+    grafana_folder: "DevOps/Prometheus"
+---
+

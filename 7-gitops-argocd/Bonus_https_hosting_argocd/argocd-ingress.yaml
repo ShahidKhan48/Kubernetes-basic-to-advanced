@@ -1,0 +1,27 @@
+# argocd-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true" # Enable SSL passthrough, meaning the ingress will forward HTTPS traffic directly to the backend service without terminating SSL.
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS" # Specify that the backend service uses HTTPS
+    cert-manager.io/cluster-issuer: letsencrypt-prod # Switch to production for trusted certificate
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: argocd.yourdomain.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              name: https
+  tls:
+  - hosts:
+    - argocd.yourdomain.com  # Replace with your domain
+    secretName: argocd-server-tls # Name of the TLS secret to be created by cert-manager

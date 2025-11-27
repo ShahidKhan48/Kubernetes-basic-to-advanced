@@ -1,0 +1,341 @@
+# Basic Resource Requests and Limits
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-demo-pod
+  namespace: default
+spec:
+  containers:
+  - name: app-container
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+    ports:
+    - containerPort: 80
+
+---
+# Multi-container Pod with Different Resource Requirements
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-resources
+  namespace: default
+spec:
+  containers:
+  # Main application container
+  - name: web-app
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    ports:
+    - containerPort: 80
+  
+  # Sidecar logging container
+  - name: log-collector
+    image: fluent/fluent-bit:latest
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    volumeMounts:
+    - name: log-volume
+      mountPath: /var/log
+  
+  # Monitoring sidecar
+  - name: metrics-exporter
+    image: prom/node-exporter:latest
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "25m"
+      limits:
+        memory: "64Mi"
+        cpu: "50m"
+    ports:
+    - containerPort: 9100
+  
+  volumes:
+  - name: log-volume
+    emptyDir: {}
+
+---
+# Deployment with Resource Management
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-deployment
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web-app
+        image: nginx:alpine
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+            ephemeral-storage: "2Gi"
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Database with High Resource Requirements
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: database-statefulset
+  namespace: default
+spec:
+  serviceName: database-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+            ephemeral-storage: "4Gi"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# GPU Resource Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-workload-pod
+  namespace: default
+spec:
+  containers:
+  - name: gpu-app
+    image: tensorflow/tensorflow:latest-gpu
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+        nvidia.com/gpu: 1
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+        nvidia.com/gpu: 1
+    command: ["python3"]
+    args: ["-c", "import tensorflow as tf; print(tf.config.list_physical_devices('GPU')); import time; time.sleep(3600)"]
+
+---
+# Batch Job with Resource Constraints
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processing-job
+  namespace: default
+spec:
+  completions: 5
+  parallelism: 2
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: batch-job
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: batch-processor
+        image: busybox:latest
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting batch processing..."
+          # Simulate CPU-intensive work
+          for i in $(seq 1 100); do
+            echo "Processing item $i"
+            sleep 1
+          done
+          echo "Batch processing completed"
+
+---
+# Quality of Service Classes Examples
+
+# Guaranteed QoS (requests = limits)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guaranteed-qos-pod
+  namespace: default
+spec:
+  containers:
+  - name: guaranteed-app
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+---
+# Burstable QoS (requests < limits)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: burstable-qos-pod
+  namespace: default
+spec:
+  containers:
+  - name: burstable-app
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+---
+# BestEffort QoS (no requests or limits)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: besteffort-qos-pod
+  namespace: default
+spec:
+  containers:
+  - name: besteffort-app
+    image: nginx:alpine
+    # No resources specified = BestEffort QoS
+
+---
+# Init Container with Resources
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-container-resources
+  namespace: default
+spec:
+  initContainers:
+  - name: init-setup
+    image: busybox:latest
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "Initializing application..."
+      mkdir -p /shared/data
+      echo "Initialization completed"
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+  
+  containers:
+  - name: main-app
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+  
+  volumes:
+  - name: shared-data
+    emptyDir: {}

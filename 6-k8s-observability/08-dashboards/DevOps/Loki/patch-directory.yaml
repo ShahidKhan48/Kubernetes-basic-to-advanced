@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-retention
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-logs-usage
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-canary
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-reads-resources
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-logs
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-writes
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-deletion
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-recording-rules
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-stack-monitoring-promtail-loki
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-chunks
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-reads
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki2-0-global-metrics
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-loki-loki-writes-resources
+  annotations:
+    grafana_folder: "DevOps/Loki"
+---
+

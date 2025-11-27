@@ -1,0 +1,639 @@
+# Jobs Examples - Production Ready Configurations
+
+---
+# Basic Job Example - Database Migration
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-migration-job
+  labels:
+    app: db-migration
+    component: migration
+spec:
+  # Job will be considered complete when 1 pod succeeds
+  completions: 1
+  
+  # Only 1 pod should run at a time
+  parallelism: 1
+  
+  # Retry failed pods up to 3 times
+  backoffLimit: 3
+  
+  # Job will be terminated if it takes longer than 10 minutes
+  activeDeadlineSeconds: 600
+  
+  template:
+    metadata:
+      labels:
+        app: db-migration
+        component: migration
+    spec:
+      restartPolicy: Never  # Jobs require Never or OnFailure
+      
+      containers:
+      - name: migration-runner
+        image: migrate/migrate:v4.15.2
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting database migration..."
+          migrate -path /migrations -database $DATABASE_URL up
+          echo "Migration completed successfully"
+        
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: url
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        volumeMounts:
+        - name: migration-scripts
+          mountPath: /migrations
+          readOnly: true
+      
+      volumes:
+      - name: migration-scripts
+        configMap:
+          name: db-migration-scripts
+      
+      # Ensure job runs on appropriate nodes
+      nodeSelector:
+        workload-type: batch
+
+---
+# Parallel Job Example - Data Processing
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-processing-job
+  labels:
+    app: data-processor
+    component: batch
+spec:
+  # Process 100 items total
+  completions: 100
+  
+  # Run 10 pods in parallel
+  parallelism: 10
+  
+  # Retry failed pods up to 2 times
+  backoffLimit: 2
+  
+  # Job timeout after 1 hour
+  activeDeadlineSeconds: 3600
+  
+  template:
+    metadata:
+      labels:
+        app: data-processor
+        component: batch
+    spec:
+      restartPolicy: OnFailure
+      
+      containers:
+      - name: data-processor
+        image: mycompany/data-processor:v1.2.0
+        command:
+        - python3
+        - process_data.py
+        
+        env:
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: BATCH_SIZE
+          value: "10"
+        - name: INPUT_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: data-config
+              key: input-bucket
+        - name: OUTPUT_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: data-config
+              key: output-bucket
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        volumeMounts:
+        - name: tmp-storage
+          mountPath: /tmp
+        - name: processing-config
+          mountPath: /app/config
+          readOnly: true
+      
+      volumes:
+      - name: tmp-storage
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: processing-config
+        configMap:
+          name: processing-config
+      
+      # Use spot instances for cost optimization
+      nodeSelector:
+        node-type: spot-instance
+
+---
+# Job with Init Container - ETL Pipeline
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etl-pipeline-job
+  labels:
+    app: etl-pipeline
+    component: data-processing
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 1
+  activeDeadlineSeconds: 7200  # 2 hours
+  
+  template:
+    metadata:
+      labels:
+        app: etl-pipeline
+        component: data-processing
+    spec:
+      restartPolicy: Never
+      
+      # Init container to validate prerequisites
+      initContainers:
+      - name: prerequisite-check
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Checking prerequisites..."
+          # Check if source data exists
+          if [ ! -f /data/source/ready.flag ]; then
+            echo "Source data not ready"
+            exit 1
+          fi
+          # Check if target is accessible
+          nc -z database.default.svc.cluster.local 5432
+          echo "Prerequisites validated"
+        
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+      
+      containers:
+      - name: etl-processor
+        image: mycompany/etl-processor:v2.1.0
+        command:
+        - python3
+        - etl_pipeline.py
+        - --source=/data/source
+        - --target=/data/target
+        - --config=/app/config/pipeline.yaml
+        
+        env:
+        - name: JOB_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: DATABASE_HOST
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: host
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        - name: LOG_LEVEL
+          value: "INFO"
+        
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+        - name: etl-config
+          mountPath: /app/config
+          readOnly: true
+        - name: temp-processing
+          mountPath: /tmp/processing
+      
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: etl-data-pvc
+      - name: etl-config
+        configMap:
+          name: etl-config
+      - name: temp-processing
+        emptyDir:
+          sizeLimit: 5Gi
+      
+      # Prefer nodes with high memory
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - memory-optimized
+
+---
+# Job with Multiple Containers - ML Training
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ml-training-job
+  labels:
+    app: ml-training
+    component: machine-learning
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 2
+  activeDeadlineSeconds: 14400  # 4 hours
+  
+  template:
+    metadata:
+      labels:
+        app: ml-training
+        component: machine-learning
+    spec:
+      restartPolicy: Never
+      
+      containers:
+      # Main training container
+      - name: ml-trainer
+        image: tensorflow/tensorflow:2.8.0-gpu
+        command:
+        - python3
+        - train_model.py
+        - --data-path=/data/training
+        - --model-output=/models/output
+        - --epochs=100
+        - --batch-size=32
+        
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: TF_CPP_MIN_LOG_LEVEL
+          value: "2"
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: ml-config
+              key: mlflow-uri
+        
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: 1
+        
+        volumeMounts:
+        - name: training-data
+          mountPath: /data/training
+          readOnly: true
+        - name: model-output
+          mountPath: /models/output
+        - name: ml-config
+          mountPath: /app/config
+          readOnly: true
+      
+      # Monitoring sidecar
+      - name: training-monitor
+        image: mycompany/training-monitor:v1.0.0
+        command:
+        - python3
+        - monitor.py
+        - --log-dir=/models/output/logs
+        
+        env:
+        - name: PROMETHEUS_GATEWAY
+          valueFrom:
+            configMapKeyRef:
+              name: ml-config
+              key: prometheus-gateway
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        volumeMounts:
+        - name: model-output
+          mountPath: /models/output
+          readOnly: true
+      
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: ml-training-data-pvc
+      - name: model-output
+        persistentVolumeClaim:
+          claimName: ml-model-output-pvc
+      - name: ml-config
+        configMap:
+          name: ml-training-config
+      
+      # Require GPU nodes
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+      
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+---
+# Cleanup Job Example - Log Rotation
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: log-cleanup-job
+  labels:
+    app: log-cleanup
+    component: maintenance
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 1
+  activeDeadlineSeconds: 1800  # 30 minutes
+  
+  template:
+    metadata:
+      labels:
+        app: log-cleanup
+        component: maintenance
+    spec:
+      restartPolicy: Never
+      serviceAccountName: log-cleanup-sa
+      
+      containers:
+      - name: log-cleaner
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting log cleanup..."
+          
+          # Clean up old log files (older than 7 days)
+          find /var/log -name "*.log" -type f -mtime +7 -delete
+          
+          # Clean up compressed logs (older than 30 days)
+          find /var/log -name "*.gz" -type f -mtime +30 -delete
+          
+          # Clean up application logs
+          find /app/logs -name "*.log" -type f -mtime +3 -delete
+          
+          # Report cleanup results
+          echo "Cleanup completed. Remaining files:"
+          du -sh /var/log /app/logs
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        
+        volumeMounts:
+        - name: var-log
+          mountPath: /var/log
+        - name: app-logs
+          mountPath: /app/logs
+        
+        securityContext:
+          runAsUser: 0  # Required for log file access
+      
+      volumes:
+      - name: var-log
+        hostPath:
+          path: /var/log
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: app-logs-pvc
+      
+      # Run on all node types
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+
+---
+# Backup Job Example - Database Backup
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-backup-job
+  labels:
+    app: db-backup
+    component: backup
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600  # 1 hour
+  
+  template:
+    metadata:
+      labels:
+        app: db-backup
+        component: backup
+    spec:
+      restartPolicy: OnFailure
+      
+      containers:
+      - name: backup-runner
+        image: postgres:13
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "Starting database backup..."
+          
+          # Create backup filename with timestamp
+          BACKUP_FILE="backup-$(date +%Y%m%d-%H%M%S).sql"
+          
+          # Perform database dump
+          pg_dump $DATABASE_URL > /backups/$BACKUP_FILE
+          
+          # Compress backup
+          gzip /backups/$BACKUP_FILE
+          
+          # Upload to S3 (if configured)
+          if [ -n "$S3_BUCKET" ]; then
+            aws s3 cp /backups/$BACKUP_FILE.gz s3://$S3_BUCKET/database-backups/
+          fi
+          
+          echo "Backup completed: $BACKUP_FILE.gz"
+        
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: url
+        - name: S3_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: backup-config
+              key: s3-bucket
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+      
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-pvc
+      
+      # Prefer nodes with network optimization
+      nodeSelector:
+        node-type: network-optimized
+
+---
+# Job with Resource Quotas - Batch Processing
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: resource-intensive-job
+  labels:
+    app: batch-processor
+    component: compute
+spec:
+  completions: 5
+  parallelism: 2
+  backoffLimit: 1
+  activeDeadlineSeconds: 10800  # 3 hours
+  
+  template:
+    metadata:
+      labels:
+        app: batch-processor
+        component: compute
+    spec:
+      restartPolicy: Never
+      
+      containers:
+      - name: processor
+        image: mycompany/batch-processor:v1.0.0
+        command:
+        - python3
+        - batch_process.py
+        - --worker-id=$(JOB_COMPLETION_INDEX)
+        
+        env:
+        - name: JOB_COMPLETION_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+        - name: MEMORY_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: CPU_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+            ephemeral-storage: "5Gi"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+            ephemeral-storage: "10Gi"
+        
+        volumeMounts:
+        - name: work-dir
+          mountPath: /work
+        - name: temp-storage
+          mountPath: /tmp
+      
+      volumes:
+      - name: work-dir
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: temp-storage
+        emptyDir:
+          sizeLimit: 5Gi
+      
+      # Resource constraints
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute-optimized
+                - memory-optimized

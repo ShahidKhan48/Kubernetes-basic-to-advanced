@@ -1,0 +1,105 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: security-baseline
+  annotations:
+    policies.kyverno.io/title: Security Baseline
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/description: "Enforce security baseline requirements"
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+  # Require non-root containers
+  - name: check-non-root
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    validate:
+      message: "Containers must run as non-root user"
+      pattern:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+          containers:
+          - securityContext:
+              runAsNonRoot: true
+  
+  # Disallow privileged containers
+  - name: disallow-privileged
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    validate:
+      message: "Privileged containers are not allowed"
+      pattern:
+        spec:
+          containers:
+          - securityContext:
+              privileged: "false"
+  
+  # Require resource limits
+  - name: require-limits
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    validate:
+      message: "Resource limits are required"
+      pattern:
+        spec:
+          containers:
+          - resources:
+              limits:
+                memory: "?*"
+                cpu: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: image-security
+  annotations:
+    policies.kyverno.io/title: Image Security
+    policies.kyverno.io/category: Security
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+  # Require image tags (no latest)
+  - name: require-image-tag
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    validate:
+      message: "Images must have specific tags (not latest)"
+      pattern:
+        spec:
+          containers:
+          - image: "!*:latest"
+  
+  # Require trusted registries
+  - name: trusted-registries
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    validate:
+      message: "Images must come from trusted registries"
+      anyPattern:
+      - spec:
+          containers:
+          - image: "spicybiryaniwala.shop/*"
+      - spec:
+          containers:
+          - image: "gcr.io/spicybiryaniwala/*"
+      - spec:
+          containers:
+          - image: "docker.io/library/*"

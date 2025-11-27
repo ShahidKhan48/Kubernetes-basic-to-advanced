@@ -1,0 +1,370 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    team: platform
+    cost-center: "engineering"
+  annotations:
+    description: "Production environment for Spicy Biryani Wala"
+    contact: "platform-team@spicybiryaniwala.shop"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    environment: staging
+    team: platform
+    cost-center: "engineering"
+  annotations:
+    description: "Staging environment for testing"
+    contact: "platform-team@spicybiryaniwala.shop"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  labels:
+    environment: dev
+    team: development
+    cost-center: "engineering"
+  annotations:
+    description: "Development environment for feature development"
+    contact: "dev-team@spicybiryaniwala.shop"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    environment: shared
+    team: platform
+    purpose: monitoring
+  annotations:
+    description: "Monitoring and observability stack"
+    contact: "platform-team@spicybiryaniwala.shop"
+---
+# Resource Quotas for each environment
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "20"
+    requests.memory: 40Gi
+    limits.cpu: "40"
+    limits.memory: 80Gi
+    
+    # Storage resources
+    requests.storage: "1Ti"
+    persistentvolumeclaims: "50"
+    
+    # Object counts
+    pods: "100"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+    deployments.apps: "20"
+    statefulsets.apps: "10"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: staging-quota
+  namespace: staging
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    requests.storage: "500Gi"
+    persistentvolumeclaims: "20"
+    pods: "50"
+    services: "10"
+    secrets: "25"
+    configmaps: "25"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: development-quota
+  namespace: development
+spec:
+  hard:
+    requests.cpu: "5"
+    requests.memory: 10Gi
+    limits.cpu: "10"
+    limits.memory: 20Gi
+    requests.storage: "200Gi"
+    persistentvolumeclaims: "10"
+    pods: "25"
+    services: "5"
+    secrets: "15"
+    configmaps: "15"
+---
+# Limit Ranges for resource constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: production-limits
+  namespace: production
+spec:
+  limits:
+  # Pod limits
+  - type: Pod
+    max:
+      cpu: "8"
+      memory: "16Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+  
+  # Container limits
+  - type: Container
+    default:
+      cpu: "1"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "500m"
+      memory: "512Mi"
+    max:
+      cpu: "4"
+      memory: "8Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+  
+  # PVC limits
+  - type: PersistentVolumeClaim
+    max:
+      storage: "100Gi"
+    min:
+      storage: "1Gi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: development-limits
+  namespace: development
+spec:
+  limits:
+  - type: Pod
+    max:
+      cpu: "2"
+      memory: "4Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+  
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "1"
+      memory: "2Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+---
+# Network Policies for namespace isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-isolation
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Allow traffic from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: prod
+  
+  # Allow traffic from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          purpose: monitoring
+  
+  # Allow traffic from ingress controllers
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  
+  # Allow HTTPS to external services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  
+  # Allow traffic to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          environment: prod
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: development-isolation
+  namespace: development
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Allow traffic from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: dev
+  
+  # Allow traffic from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          purpose: monitoring
+  
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  
+  # Allow external HTTPS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  
+  # Allow traffic to staging for integration tests
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          environment: staging
+---
+# Service Accounts for each namespace
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: production-sa
+  namespace: production
+  labels:
+    environment: prod
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: staging-sa
+  namespace: staging
+  labels:
+    environment: staging
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: development-sa
+  namespace: development
+  labels:
+    environment: dev
+---
+# Example application deployment in production namespace
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: production
+  labels:
+    app: web-app
+    environment: prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+        environment: prod
+    spec:
+      serviceAccountName: production-sa
+      
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        # Resources will be constrained by LimitRange
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Service in production namespace
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-service
+  namespace: production
+  labels:
+    app: web-app
+spec:
+  selector:
+    app: web-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP

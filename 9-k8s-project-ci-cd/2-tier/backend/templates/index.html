@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python 2-Tier App</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f4f4f4; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; text-align: center; margin-bottom: 2rem; border-radius: 10px; }
+        .auth-section, .posts-section { background: white; padding: 2rem; margin-bottom: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 1rem; }
+        .btn { background: #667eea; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-right: 10px; }
+        .btn:hover { background: #5a6fd8; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        .post { background: #f8f9fa; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; border-left: 4px solid #667eea; }
+        .post h3 { color: #333; margin-bottom: 0.5rem; }
+        .post-meta { color: #666; font-size: 0.9rem; margin-bottom: 1rem; }
+        .comment { background: white; padding: 1rem; margin: 0.5rem 0; border-radius: 5px; border-left: 3px solid #28a745; }
+        .hidden { display: none; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: white; padding: 1.5rem; border-radius: 10px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐍 Python 2-Tier Application</h1>
+            <p>Flask Backend + Frontend Integration</p>
+        </div>
+
+        <div class="stats" id="statsSection">
+            <!-- Stats will be loaded here -->
+        </div>
+
+        <div class="auth-section" id="authSection">
+            <h2>Authentication</h2>
+            <div id="loginForm">
+                <h3>Login</h3>
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password">
+                </div>
+                <button class="btn" onclick="login()">Login</button>
+                <button class="btn btn-secondary" onclick="showRegisterForm()">Register</button>
+            </div>
+
+            <div id="registerForm" class="hidden">
+                <h3>Register</h3>
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input type="text" id="regUsername" placeholder="Choose username">
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="regEmail" placeholder="Enter email">
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="regPassword" placeholder="Choose password">
+                </div>
+                <button class="btn" onclick="register()">Register</button>
+                <button class="btn btn-secondary" onclick="showLoginForm()">Back to Login</button>
+            </div>
+
+            <div id="userSection" class="hidden">
+                <h3>Welcome, <span id="currentUser"></span>!</h3>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div class="posts-section">
+            <h2>Blog Posts</h2>
+            
+            <div id="createPostSection" class="hidden">
+                <h3>Create New Post</h3>
+                <div class="form-group">
+                    <label>Title:</label>
+                    <input type="text" id="postTitle" placeholder="Enter post title">
+                </div>
+                <div class="form-group">
+                    <label>Content:</label>
+                    <textarea id="postContent" rows="5" placeholder="Write your post content..."></textarea>
+                </div>
+                <button class="btn" onclick="createPost()">Publish Post</button>
+            </div>
+
+            <div id="postsContainer">
+                <!-- Posts will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+            loadPosts();
+            loadStats();
+        });
+
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/user');
+                if (response.ok) {
+                    currentUser = await response.json();
+                    showUserSection();
+                } else {
+                    showAuthSection();
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                showAuthSection();
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    currentUser = data.user;
+                    showUserSection();
+                    loadPosts();
+                    alert('Login successful!');
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Login failed: ' + error.message);
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    currentUser = data.user;
+                    showUserSection();
+                    loadPosts();
+                    alert('Registration successful!');
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Registration failed: ' + error.message);
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                currentUser = null;
+                showAuthSection();
+                loadPosts();
+                alert('Logged out successfully!');
+            } catch (error) {
+                alert('Logout failed: ' + error.message);
+            }
+        }
+
+        async function createPost() {
+            const title = document.getElementById('postTitle').value;
+            const content = document.getElementById('postContent').value;
+
+            if (!title || !content) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('postTitle').value = '';
+                    document.getElementById('postContent').value = '';
+                    loadPosts();
+                    loadStats();
+                    alert('Post created successfully!');
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Failed to create post: ' + error.message);
+            }
+        }
+
+        async function loadPosts() {
+            try {
+                const response = await fetch('/api/posts');
+                const posts = await response.json();
+                
+                const container = document.getElementById('postsContainer');
+                if (posts.length === 0) {
+                    container.innerHTML = '<p>No posts yet. Be the first to create one!</p>';
+                    return;
+                }
+
+                container.innerHTML = posts.map(post => `
+                    <div class="post">
+                        <h3>${post.title}</h3>
+                        <div class="post-meta">By ${post.author_name} • ${new Date(post.created_at).toLocaleDateString()}</div>
+                        <p>${post.content}</p>
+                        <button class="btn btn-secondary" onclick="loadComments(${post.id})">View Comments</button>
+                        <div id="comments-${post.id}" class="hidden"></div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load posts:', error);
+            }
+        }
+
+        async function loadComments(postId) {
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`);
+                const comments = await response.json();
+                
+                const container = document.getElementById(`comments-${postId}`);
+                container.classList.remove('hidden');
+                
+                let html = '<h4>Comments:</h4>';
+                if (currentUser) {
+                    html += `
+                        <div class="form-group">
+                            <textarea id="comment-${postId}" placeholder="Add a comment..." rows="2"></textarea>
+                            <button class="btn" onclick="addComment(${postId})">Add Comment</button>
+                        </div>
+                    `;
+                }
+                
+                html += comments.map(comment => `
+                    <div class="comment">
+                        <strong>${comment.author_name}</strong> • ${new Date(comment.created_at).toLocaleDateString()}
+                        <p>${comment.content}</p>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Failed to load comments:', error);
+            }
+        }
+
+        async function addComment(postId) {
+            const content = document.getElementById(`comment-${postId}`).value;
+            
+            if (!content) {
+                alert('Please enter a comment');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById(`comment-${postId}`).value = '';
+                    loadComments(postId);
+                    loadStats();
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Failed to add comment: ' + error.message);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                document.getElementById('statsSection').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.users}</div>
+                        <div>Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.posts}</div>
+                        <div>Posts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.comments}</div>
+                        <div>Comments</div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        function showLoginForm() {
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+        }
+
+        function showRegisterForm() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+        }
+
+        function showAuthSection() {
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('userSection').classList.add('hidden');
+            document.getElementById('createPostSection').classList.add('hidden');
+            showLoginForm();
+        }
+
+        function showUserSection() {
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('userSection').classList.remove('hidden');
+            document.getElementById('createPostSection').classList.remove('hidden');
+            document.getElementById('currentUser').textContent = currentUser.username;
+        }
+    </script>
+</body>
+</html>

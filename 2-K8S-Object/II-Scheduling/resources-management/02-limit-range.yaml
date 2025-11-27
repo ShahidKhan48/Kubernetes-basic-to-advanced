@@ -1,0 +1,245 @@
+# Comprehensive Limit Range Examples
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: container-limit-range
+  namespace: default
+spec:
+  limits:
+  # Container limits
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+      ephemeral-storage: "1Gi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+      ephemeral-storage: "256Mi"
+    max:
+      cpu: "2000m"
+      memory: "2Gi"
+      ephemeral-storage: "4Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+      ephemeral-storage: "128Mi"
+
+---
+# Pod-level Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pod-limit-range
+  namespace: default
+spec:
+  limits:
+  - type: Pod
+    max:
+      cpu: "4000m"
+      memory: "8Gi"
+      ephemeral-storage: "10Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+      ephemeral-storage: "256Mi"
+
+---
+# PVC Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pvc-limit-range
+  namespace: default
+spec:
+  limits:
+  - type: PersistentVolumeClaim
+    max:
+      storage: "100Gi"
+    min:
+      storage: "1Gi"
+
+---
+# Production Environment Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: production-limit-range
+  namespace: production
+spec:
+  limits:
+  # Container limits for production
+  - type: Container
+    default:
+      cpu: "1000m"
+      memory: "1Gi"
+      ephemeral-storage: "2Gi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+      ephemeral-storage: "512Mi"
+    max:
+      cpu: "4000m"
+      memory: "8Gi"
+      ephemeral-storage: "20Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+      ephemeral-storage: "256Mi"
+  
+  # Pod limits for production
+  - type: Pod
+    max:
+      cpu: "8000m"
+      memory: "16Gi"
+      ephemeral-storage: "50Gi"
+    min:
+      cpu: "200m"
+      memory: "256Mi"
+      ephemeral-storage: "512Mi"
+  
+  # PVC limits for production
+  - type: PersistentVolumeClaim
+    max:
+      storage: "500Gi"
+    min:
+      storage: "5Gi"
+
+---
+# Development Environment Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: development-limit-range
+  namespace: development
+spec:
+  limits:
+  # Container limits for development
+  - type: Container
+    default:
+      cpu: "200m"
+      memory: "256Mi"
+      ephemeral-storage: "512Mi"
+    defaultRequest:
+      cpu: "50m"
+      memory: "64Mi"
+      ephemeral-storage: "128Mi"
+    max:
+      cpu: "1000m"
+      memory: "1Gi"
+      ephemeral-storage: "2Gi"
+    min:
+      cpu: "25m"
+      memory: "32Mi"
+      ephemeral-storage: "64Mi"
+  
+  # Pod limits for development
+  - type: Pod
+    max:
+      cpu: "2000m"
+      memory: "4Gi"
+      ephemeral-storage: "8Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+      ephemeral-storage: "128Mi"
+  
+  # PVC limits for development
+  - type: PersistentVolumeClaim
+    max:
+      storage: "50Gi"
+    min:
+      storage: "1Gi"
+
+---
+# GPU Workload Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: gpu-limit-range
+  namespace: gpu-workloads
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "2000m"
+      memory: "4Gi"
+      nvidia.com/gpu: "1"
+    defaultRequest:
+      cpu: "1000m"
+      memory: "2Gi"
+      nvidia.com/gpu: "1"
+    max:
+      cpu: "8000m"
+      memory: "32Gi"
+      nvidia.com/gpu: "4"
+    min:
+      cpu: "500m"
+      memory: "1Gi"
+      nvidia.com/gpu: "1"
+
+---
+# Batch Processing Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: batch-limit-range
+  namespace: batch-processing
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "1000m"
+      memory: "2Gi"
+      ephemeral-storage: "4Gi"
+    defaultRequest:
+      cpu: "500m"
+      memory: "1Gi"
+      ephemeral-storage: "2Gi"
+    max:
+      cpu: "4000m"
+      memory: "16Gi"
+      ephemeral-storage: "50Gi"
+    min:
+      cpu: "100m"
+      memory: "256Mi"
+      ephemeral-storage: "512Mi"
+  
+  - type: Pod
+    max:
+      cpu: "8000m"
+      memory: "32Gi"
+      ephemeral-storage: "100Gi"
+
+---
+# Microservices Limit Range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: microservices-limit-range
+  namespace: microservices
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "300m"
+      memory: "384Mi"
+      ephemeral-storage: "768Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+      ephemeral-storage: "256Mi"
+    max:
+      cpu: "1000m"
+      memory: "2Gi"
+      ephemeral-storage: "4Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+      ephemeral-storage: "128Mi"
+  
+  - type: Pod
+    max:
+      cpu: "2000m"
+      memory: "4Gi"
+      ephemeral-storage: "8Gi"

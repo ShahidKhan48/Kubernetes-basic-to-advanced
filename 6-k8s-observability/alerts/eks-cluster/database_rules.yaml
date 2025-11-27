@@ -1,0 +1,97 @@
+namespace: database
+groups:
+  - name: database.rules
+    rules:
+    - alert: MySQLDown
+      annotations:
+        description: MySQL {{$labels.job}} on {{$labels.instance}} is not up. <@Vipul Kanungo>
+        summary: MySQL not up
+      expr: mysql_up != 1
+      for: 2m
+      labels:
+        severity: critical
+        type: database
+    - alert: MYSQL_CONNECTION_CRITICAL
+      annotations:
+        description: MySQL {{$labels.job}} connection usages reach 80% <@Vipul Kanungo>
+        summary: Mysql 
+      expr: 100*sum(mysql_global_status_threads_connected{}) by (job) / sum(mysql_global_variables_max_connections{}) by (job) > 80
+      for: 5m
+      labels:
+        severity: critical
+        type: database
+    - alert: MYSQL_CONNECTION_WARNING
+      annotations:
+        description: MySQL {{$labels.job}}  connection usages reach 70% <@Vipul Kanungo> 
+        summary: Mysql connection usages reach 70% 
+      expr: 100*sum(mysql_global_status_threads_connected{}) by (job) / sum(mysql_global_variables_max_connections{}) by (job) > 70
+      for: 5m
+      labels:
+        severity: warning
+        type: database
+    # As per the request of @vipul removing this alerting rule
+    # - alert: MySQLReplicationNotRunning
+    #   annotations:
+    #     description: Slave replication (IO or SQL) has been down for more than 2 minutes.
+    #     summary: Slave replication is not running
+    #   expr: mysql_slave_status_slave_io_running{job!~"archival-db-mysqld-exporter|multimaster-mysqld-exporter"} == 0 or mysql_slave_status_slave_sql_running{job!="archival-db-mysqld-exporter|multimaster-mysqld-exporter"} == 0
+    #   for: 2m
+    #   labels:
+    #     severity: critical
+    #     type: database
+
+    - alert: MySQLReplicationLag
+      annotations:
+        description: The mysql slave replication has fallen behind and is not recovering <@Vipul Kanungo>
+        summary: MySQL slave replication is lagging
+      expr: (instance:mysql_slave_lag_seconds > 30) and on(instance) (predict_linear(instance:mysql_slave_lag_seconds[5m], 60 * 2) > 0)
+      for: 1m
+      labels:
+        severity: critical
+        type: database
+
+    - alert: MySQLInnoDBLogWaits
+      annotations:
+        description: The innodb logs are waiting for disk at a rate of {{$value}} / second. <@Vipul Kanungo>
+        summary: MySQL innodb log writes stalling
+      expr: rate(mysql_global_status_innodb_log_waits[15m]) > 10
+      labels:
+        severity: warning
+        type: database
+      # Alerts for MongoDb
+    - alert: MongodbDown
+      annotations:
+        summary: MongoDB Down (instance {{ $labels.instance }})
+        description: "MongoDB instance is down\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+      expr: up{job="dev-mongo-db-mongo-exporter"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        type: database
+    - alert: MongodbReplicationLag
+      expr: (mongodb_rs_members_optimeDate{member_state="PRIMARY"} - on (set) group_right mongodb_rs_members_optimeDate{member_state="SECONDARY"}) / 1000 > 10
+      for: 1m
+      labels:
+        severity: critical
+        type: database
+      annotations:
+        summary: MongoDB replication lag (instance {{ $labels.instance }})
+        description: "Mongodb replication lag is more than 10s\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MongodbTooManyConnections
+      expr: avg by(instance) (rate(mongodb_ss_connections{conn_type="current"}[1m])) / avg by(instance) (sum (mongodb_ss_connections) by (instance)) * 100 > 80
+      for: 2m
+      labels:
+        severity: warning
+        type: database
+      annotations:
+        summary: MongoDB too many connections (instance {{ $labels.instance }})
+        description: "Too many connections (> 80%)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MongodbTooManyConnections
+      expr: avg by(instance) (rate(mongodb_ss_connections{conn_type="current"}[1m])) / avg by(instance) (sum (mongodb_ss_connections) by (instance)) * 100 > 85
+      for: 2m
+      labels:
+        severity: critical
+        type: database
+      annotations:
+        summary: MongoDB too many connections (instance {{ $labels.instance }})
+        description: "Too many connections (> 85%)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

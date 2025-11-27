@@ -1,0 +1,61 @@
+# Pod Disruption Budget (PDB)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app-pdb
+  namespace: default
+spec:
+  # Minimum number of pods that must remain available
+  minAvailable: 2
+  
+  # OR use maxUnavailable instead of minAvailable
+  # maxUnavailable: 1
+  # maxUnavailable: 25%
+  
+  selector:
+    matchLabels:
+      app: web-app
+
+---
+# Example Deployment for PDB
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-deployment
+  namespace: default
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+---
+# PDB with Percentage
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: database-pdb
+  namespace: default
+spec:
+  maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: database
+      tier: backend

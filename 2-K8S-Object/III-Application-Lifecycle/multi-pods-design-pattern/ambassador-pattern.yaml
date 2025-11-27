@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-with-ambassador
+  labels:
+    app: ambassador-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ambassador-demo
+  template:
+    metadata:
+      labels:
+        app: ambassador-demo
+    spec:
+      containers:
+      # Main application container
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        env:
+        # Connect to services via ambassador
+        - name: DATABASE_HOST
+          value: "localhost"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: REDIS_HOST
+          value: "localhost"
+        - name: REDIS_PORT
+          value: "6379"
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      
+      # Ambassador: Database proxy
+      - name: db-ambassador
+        image: haproxy:2.4-alpine
+        ports:
+        - containerPort: 5432
+        
+        volumeMounts:
+        - name: haproxy-db-config
+          mountPath: /usr/local/etc/haproxy/haproxy.cfg
+          subPath: haproxy.cfg
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      
+      # Ambassador: Redis proxy
+      - name: redis-ambassador
+        image: haproxy:2.4-alpine
+        ports:
+        - containerPort: 6379
+        
+        volumeMounts:
+        - name: haproxy-redis-config
+          mountPath: /usr/local/etc/haproxy/haproxy.cfg
+          subPath: haproxy.cfg
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      
+      volumes:
+      - name: haproxy-db-config
+        configMap:
+          name: haproxy-db-config
+      - name: haproxy-redis-config
+        configMap:
+          name: haproxy-redis-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-db-config
+data:
+  haproxy.cfg: |
+    global
+        daemon
+    
+    defaults
+        mode tcp
+        timeout connect 5000ms
+        timeout client 50000ms
+        timeout server 50000ms
+    
+    frontend db_frontend
+        bind *:5432
+        default_backend db_servers
+    
+    backend db_servers
+        balance roundrobin
+        server db1 postgres-primary.database.svc.cluster.local:5432 check
+        server db2 postgres-replica.database.svc.cluster.local:5432 check backup
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-redis-config
+data:
+  haproxy.cfg: |
+    global
+        daemon
+    
+    defaults
+        mode tcp
+        timeout connect 5000ms
+        timeout client 50000ms
+        timeout server 50000ms
+    
+    frontend redis_frontend
+        bind *:6379
+        default_backend redis_servers
+    
+    backend redis_servers
+        balance first
+        server redis1 redis-master.cache.svc.cluster.local:6379 check
+        server redis2 redis-replica.cache.svc.cluster.local:6379 check backup

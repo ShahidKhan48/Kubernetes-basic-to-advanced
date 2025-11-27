@@ -1,0 +1,135 @@
+# Canary Deployment Strategy
+# Stable Version (90% traffic)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stable-deployment
+  labels:
+    app: web-app
+    version: stable
+    strategy: canary
+spec:
+  replicas: 9
+  selector:
+    matchLabels:
+      app: web-app
+      version: stable
+  template:
+    metadata:
+      labels:
+        app: web-app
+        version: stable
+    spec:
+      containers:
+      - name: web-container
+        image: nginx:1.20
+        ports:
+        - containerPort: 80
+        env:
+        - name: VERSION
+          value: "stable"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+---
+# Canary Version (10% traffic)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canary-deployment
+  labels:
+    app: web-app
+    version: canary
+    strategy: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-app
+      version: canary
+  template:
+    metadata:
+      labels:
+        app: web-app
+        version: canary
+    spec:
+      containers:
+      - name: web-container
+        image: nginx:1.21
+        ports:
+        - containerPort: 80
+        env:
+        - name: VERSION
+          value: "canary"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+---
+# Main Service (Routes to both stable and canary)
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-service
+  labels:
+    app: web-app
+spec:
+  selector:
+    app: web-app  # Selects both stable and canary pods
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer
+
+---
+# Ingress for Advanced Canary Routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "10"
+spec:
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: canary-service
+            port:
+              number: 80
+
+---
+# Stable Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stable-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: canary-service
+            port:
+              number: 80

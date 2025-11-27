@@ -1,0 +1,455 @@
+# Complete E-commerce Application with Storage
+# Database Tier - PostgreSQL with persistent storage
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-database
+  labels:
+    app: postgres
+    tier: database
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        ports:
+        - containerPort: 5432
+        
+        env:
+        - name: POSTGRES_DB
+          value: "spicybiryaniwala_prod"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: postgres-password
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+        
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
+---
+# Redis Cache with memory-backed storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+  labels:
+    app: redis
+    tier: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        
+        command: ["redis-server"]
+        args: ["/etc/redis/redis.conf"]
+        
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+        - name: redis-data
+          mountPath: /data
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+      - name: redis-data
+        emptyDir:
+          medium: Memory  # Use RAM for cache
+          sizeLimit: 1Gi
+---
+# Web Application with shared file storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-application
+  labels:
+    app: web-app
+    tier: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+        tier: frontend
+    spec:
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/ecommerce-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: database-url
+        - name: REDIS_URL
+          value: "redis://redis:6379"
+        - name: UPLOAD_PATH
+          value: "/app/uploads"
+        - name: STATIC_PATH
+          value: "/app/static"
+        
+        volumeMounts:
+        # Shared uploads directory
+        - name: shared-uploads
+          mountPath: /app/uploads
+        
+        # Static content
+        - name: static-content
+          mountPath: /app/static
+        
+        # Application logs
+        - name: app-logs
+          mountPath: /app/logs
+        
+        # Temporary files
+        - name: tmp-storage
+          mountPath: /tmp
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      # Shared storage for file uploads (ReadWriteMany)
+      - name: shared-uploads
+        persistentVolumeClaim:
+          claimName: shared-uploads-pvc
+      
+      # Static content storage
+      - name: static-content
+        persistentVolumeClaim:
+          claimName: static-content-pvc
+      
+      # Application logs
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: app-logs-pvc
+      
+      # Temporary storage
+      - name: tmp-storage
+        emptyDir:
+          sizeLimit: 1Gi
+---
+# Background Worker with job processing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: background-worker
+  labels:
+    app: worker
+    tier: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+        tier: worker
+    spec:
+      containers:
+      - name: worker
+        image: spicybiryaniwala.shop/worker:v1.0.0
+        
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: database-url
+        - name: REDIS_URL
+          value: "redis://redis:6379"
+        - name: UPLOAD_PATH
+          value: "/app/uploads"
+        
+        volumeMounts:
+        # Access to shared uploads for processing
+        - name: shared-uploads
+          mountPath: /app/uploads
+        
+        # Worker logs
+        - name: worker-logs
+          mountPath: /app/logs
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      
+      volumes:
+      - name: shared-uploads
+        persistentVolumeClaim:
+          claimName: shared-uploads-pvc
+      
+      - name: worker-logs
+        emptyDir:
+          sizeLimit: 500Mi
+---
+# Storage Classes
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iops: "3000"
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard-storage
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+# PersistentVolumeClaims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-uploads-pvc
+  labels:
+    app: ecommerce
+    type: uploads
+spec:
+  accessModes:
+  - ReadWriteMany  # Multiple pods need access
+  storageClassName: standard-storage
+  resources:
+    requests:
+      storage: 500Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: static-content-pvc
+  labels:
+    app: ecommerce
+    type: static
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: standard-storage
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-logs-pvc
+  labels:
+    app: ecommerce
+    type: logs
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: standard-storage
+  resources:
+    requests:
+      storage: 20Gi
+---
+# ConfigMaps
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+data:
+  postgresql.conf: |
+    # PostgreSQL configuration for production
+    max_connections = 200
+    shared_buffers = 1GB
+    effective_cache_size = 3GB
+    maintenance_work_mem = 256MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 4MB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+data:
+  redis.conf: |
+    # Redis configuration
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    save 900 1
+    save 300 10
+    save 60 10000
+    appendonly yes
+    appendfsync everysec
+---
+# Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: database-secret
+type: Opaque
+data:
+  postgres-password: cG9zdGdyZXNfcHJvZF9wYXNzd29yZF8xMjM=  # postgres_prod_password_123
+  database-url: cG9zdGdyZXNxbDovL3Bvc3RncmVzOnBvc3RncmVzX3Byb2RfcGFzc3dvcmRfMTIzQHBvc3RncmVzOjU0MzIvc3BpY3liaXJ5YW5pd2FsYV9wcm9k
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-service
+  labels:
+    app: web-app
+spec:
+  selector:
+    app: web-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer

@@ -1,0 +1,490 @@
+# ReplicaSet Examples - Production Ready Configurations
+
+---
+# Basic ReplicaSet Example
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-replicaset
+  labels:
+    app: nginx
+    tier: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: nginx
+        tier: frontend
+        version: "1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# ReplicaSet with Advanced Selector
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-server-replicaset
+  labels:
+    app: api-server
+    environment: production
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: api-server
+    matchExpressions:
+    - key: environment
+      operator: In
+      values:
+      - production
+      - staging
+    - key: version
+      operator: Exists
+  template:
+    metadata:
+      labels:
+        app: api-server
+        environment: production
+        version: "2.1.0"
+        team: backend
+    spec:
+      containers:
+      - name: api-server
+        image: mycompany/api-server:2.1.0
+        ports:
+        - containerPort: 8080
+          name: api-port
+        - containerPort: 9090
+          name: metrics-port
+        
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: url
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: cache-config
+              key: redis-url
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: app-config
+          mountPath: /app/config
+          readOnly: true
+      
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: app-config
+        configMap:
+          name: api-server-config
+      
+      # Pod disruption budget considerations
+      terminationGracePeriodSeconds: 30
+      
+      # Node selection
+      nodeSelector:
+        node-type: compute-optimized
+      
+      # Affinity rules
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - api-server
+              topologyKey: kubernetes.io/hostname
+
+---
+# ReplicaSet for Microservice with Service Mesh
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: user-service-replicaset
+  labels:
+    app: user-service
+    service: user-management
+    version: v1
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: user-service
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: user-service
+        version: v1
+        service: user-management
+      annotations:
+        # Istio sidecar injection
+        sidecar.istio.io/inject: "true"
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: user-service-sa
+      containers:
+      - name: user-service
+        image: mycompany/user-service:v1.2.3
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        
+        env:
+        - name: SERVICE_NAME
+          value: "user-service"
+        - name: SERVICE_VERSION
+          value: "v1.2.3"
+        - name: JAEGER_AGENT_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: DATABASE_HOST
+          valueFrom:
+            secretKeyRef:
+              name: user-db-secret
+              key: host
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: user-db-secret
+              key: password
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "300m"
+        
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Startup probe for slow-starting containers
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+      
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: config-volume
+        configMap:
+          name: user-service-config
+          items:
+          - key: application.yml
+            path: application.yml
+          - key: logback.xml
+            path: logback.xml
+      
+      # Security context for the pod
+      securityContext:
+        fsGroup: 1001
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # DNS configuration
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+      
+      # Topology spread constraints
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: user-service
+
+---
+# ReplicaSet with HPA Considerations
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-frontend-replicaset
+  labels:
+    app: web-frontend
+    component: ui
+    tier: frontend
+spec:
+  replicas: 3  # This will be managed by HPA
+  selector:
+    matchLabels:
+      app: web-frontend
+      component: ui
+  template:
+    metadata:
+      labels:
+        app: web-frontend
+        component: ui
+        tier: frontend
+    spec:
+      containers:
+      - name: web-frontend
+        image: nginx:1.21-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        
+        # Resource requests are crucial for HPA
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"  # HPA will use this for scaling decisions
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: static-content
+          mountPath: /usr/share/nginx/html
+      
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+      - name: static-content
+        configMap:
+          name: static-content
+      
+      # Anti-affinity to spread pods across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - web-frontend
+              topologyKey: kubernetes.io/hostname
+
+---
+# ReplicaSet with Custom Metrics for Monitoring
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: worker-replicaset
+  labels:
+    app: background-worker
+    type: processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: background-worker
+      type: processor
+  template:
+    metadata:
+      labels:
+        app: background-worker
+        type: processor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: worker
+        image: mycompany/background-worker:latest
+        ports:
+        - containerPort: 8080
+          name: metrics
+        
+        env:
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: QUEUE_URL
+          valueFrom:
+            secretKeyRef:
+              name: queue-secret
+              key: url
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        # Custom metrics endpoint for monitoring
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+      
+      terminationGracePeriodSeconds: 30

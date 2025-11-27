@@ -1,0 +1,160 @@
+# ArgoCD Applications for Multi-Tier Deployments
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+
+---
+# 1-Tier Blog App
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: blog-app-1tier
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: multi-tier-project
+  source:
+    repoURL: https://github.com/your-username/k8s-multi-tier-apps.git
+    targetRevision: HEAD
+    path: 1-tier/k8s-manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tier-1
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+---
+# 2-Tier Python App
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: python-app-2tier
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: multi-tier-project
+  source:
+    repoURL: https://github.com/your-username/k8s-multi-tier-apps.git
+    targetRevision: HEAD
+    path: 2-tier/k8s-manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tier-2
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+---
+# 3-Tier React+Node+MongoDB App
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce-app-3tier
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: multi-tier-project
+  source:
+    repoURL: https://github.com/your-username/k8s-multi-tier-apps.git
+    targetRevision: HEAD
+    path: 3-tier/k8s-manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tier-3
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+---
+# 4-Tier Microservices App
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: microservices-app-4tier
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: multi-tier-project
+  source:
+    repoURL: https://github.com/your-username/k8s-multi-tier-apps.git
+    targetRevision: HEAD
+    path: 4-tier/k8s-manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tier-4
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+
+---
+# ArgoCD Project
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: multi-tier-project
+  namespace: argocd
+spec:
+  description: Multi-tier applications project
+  sourceRepos:
+  - 'https://github.com/your-username/k8s-multi-tier-apps.git'
+  destinations:
+  - namespace: 'tier-*'
+    server: https://kubernetes.default.svc
+  - namespace: 'monitoring'
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  - group: 'networking.k8s.io'
+    kind: Ingress
+  namespaceResourceWhitelist:
+  - group: ''
+    kind: '*'
+  - group: 'apps'
+    kind: '*'
+  - group: 'extensions'
+    kind: '*'
+
+---
+# Monitoring Stack Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: multi-tier-project
+  source:
+    repoURL: https://github.com/your-username/k8s-multi-tier-apps.git
+    targetRevision: HEAD
+    path: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

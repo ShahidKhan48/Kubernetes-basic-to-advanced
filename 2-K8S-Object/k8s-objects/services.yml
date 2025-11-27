@@ -1,0 +1,518 @@
+# Services Examples - Production Ready Configurations
+
+---
+# Basic ClusterIP Service Example
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+    tier: frontend
+spec:
+  type: ClusterIP  # Default type - internal cluster access only
+  selector:
+    app: nginx
+    tier: frontend
+  ports:
+  - name: http
+    port: 80        # Service port
+    targetPort: 80  # Container port
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 443
+    protocol: TCP
+
+---
+# NodePort Service Example - External Access
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-server-nodeport
+  labels:
+    app: api-server
+    tier: backend
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: NodePort
+  selector:
+    app: api-server
+    tier: backend
+  ports:
+  - name: api-port
+    port: 8080
+    targetPort: 8080
+    nodePort: 30080  # External port (30000-32767 range)
+    protocol: TCP
+  - name: metrics-port
+    port: 9090
+    targetPort: 9090
+    nodePort: 30090
+    protocol: TCP
+
+---
+# LoadBalancer Service Example - Cloud Provider Integration
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-loadbalancer
+  labels:
+    app: web-app
+    tier: frontend
+  annotations:
+    # AWS Load Balancer annotations
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "5"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "2"
+    # SSL Certificate
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "https"
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-app
+    tier: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 8080
+    protocol: TCP
+  # Preserve client IP
+  externalTrafficPolicy: Local
+  # Session affinity
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+
+---
+# ExternalName Service Example - External Service Integration
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database-service
+  labels:
+    app: external-db
+    component: database
+spec:
+  type: ExternalName
+  externalName: database.example.com  # External DNS name
+  ports:
+  - name: postgres
+    port: 5432
+    protocol: TCP
+
+---
+# Headless Service Example - StatefulSet Support
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless
+  labels:
+    app: mongodb
+    component: database
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  selector:
+    app: mongodb
+    component: database
+  ports:
+  - name: mongodb
+    port: 27017
+    targetPort: 27017
+    protocol: TCP
+  - name: mongodb-metrics
+    port: 9216
+    targetPort: 9216
+    protocol: TCP
+
+---
+# Multi-Port Service Example - Microservice with Multiple Endpoints
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+    service: user-management
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/actuator/prometheus"
+spec:
+  type: ClusterIP
+  selector:
+    app: user-service
+    version: v1
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: grpc
+    port: 9000
+    targetPort: 9000
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: health
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+
+---
+# Service with Custom Endpoints - External Service Mapping
+apiVersion: v1
+kind: Service
+metadata:
+  name: legacy-system-service
+  labels:
+    app: legacy-system
+    component: integration
+spec:
+  type: ClusterIP
+  ports:
+  - name: api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: admin
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+
+---
+# Corresponding Endpoints for Custom Service
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: legacy-system-service
+  labels:
+    app: legacy-system
+    component: integration
+subsets:
+- addresses:
+  - ip: 192.168.1.100  # External system IP
+  - ip: 192.168.1.101  # Backup system IP
+  ports:
+  - name: api
+    port: 8080
+    protocol: TCP
+  - name: admin
+    port: 9090
+    protocol: TCP
+
+---
+# Service with Traffic Policy - Performance Optimization
+apiVersion: v1
+kind: Service
+metadata:
+  name: high-performance-api
+  labels:
+    app: high-performance-api
+    tier: backend
+  annotations:
+    service.kubernetes.io/topology-aware-hints: "auto"
+spec:
+  type: ClusterIP
+  selector:
+    app: high-performance-api
+    tier: backend
+  ports:
+  - name: api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  # Route traffic to local zone when possible
+  internalTrafficPolicy: Local
+  # IP families for dual-stack
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+
+---
+# Service for Database Cluster - Read/Write Split
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-primary
+  labels:
+    app: postgres
+    role: primary
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    role: primary
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+
+---
+# Read-only Service for Database Replicas
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica
+  labels:
+    app: postgres
+    role: replica
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    role: replica
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+
+---
+# Service with Health Check Configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-with-health-check
+  labels:
+    app: api-server
+    component: backend
+  annotations:
+    # Health check annotations for cloud providers
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/health"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "8080"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "HTTP"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "30"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "5"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "3"
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-server
+    component: backend
+  ports:
+  - name: api
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  - name: health
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  externalTrafficPolicy: Local
+
+---
+# Service Mesh Integration - Istio Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  labels:
+    app: payment-service
+    version: v1
+    service: payment
+  annotations:
+    # Istio annotations
+    sidecar.istio.io/inject: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app: payment-service
+    version: v1
+  ports:
+  - name: http  # Named ports required for Istio
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: grpc
+    port: 9000
+    targetPort: 9000
+    protocol: TCP
+
+---
+# Service for Canary Deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-stable
+  labels:
+    app: web-app
+    version: stable
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    version: stable
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+# Canary Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-canary
+  labels:
+    app: web-app
+    version: canary
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    version: canary
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+# Service with Custom Load Balancing
+apiVersion: v1
+kind: Service
+metadata:
+  name: cache-service
+  labels:
+    app: redis-cache
+    component: cache
+  annotations:
+    # Custom load balancer configuration
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-12345,subnet-67890"
+    service.beta.kubernetes.io/aws-load-balancer-security-groups: "sg-12345678"
+spec:
+  type: LoadBalancer
+  selector:
+    app: redis-cache
+    component: cache
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  - name: sentinel
+    port: 26379
+    targetPort: 26379
+    protocol: TCP
+
+---
+# Service for gRPC Application
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-service
+  labels:
+    app: grpc-server
+    protocol: grpc
+  annotations:
+    # gRPC specific annotations
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: grpc-server
+    protocol: grpc
+  ports:
+  - name: grpc
+    port: 9000
+    targetPort: 9000
+    protocol: TCP
+  - name: grpc-web
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+# Service with IPv6 Support
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipv6-service
+  labels:
+    app: modern-app
+    network: dual-stack
+spec:
+  type: ClusterIP
+  selector:
+    app: modern-app
+    network: dual-stack
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  # Dual-stack configuration
+  ipFamilies:
+  - IPv4
+  - IPv6
+  ipFamilyPolicy: PreferDualStack
+
+---
+# Service for Monitoring Stack
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  labels:
+    app: prometheus
+    component: monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+    component: monitoring
+  ports:
+  - name: web
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+
+---
+# Service with Custom DNS Configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: custom-dns-service
+  labels:
+    app: dns-app
+    component: networking
+spec:
+  type: ClusterIP
+  selector:
+    app: dns-app
+    component: networking
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  # Custom cluster DNS
+  clusterIP: 10.96.0.100  # Static cluster IP
+  # Publishing not ready addresses
+  publishNotReadyAddresses: true

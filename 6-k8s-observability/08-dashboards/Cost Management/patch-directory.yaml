@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-cost-management-cost-dashboard.json-cost-dashboard
+  annotations:
+    grafana_folder: "Cost Management"
+---
+

@@ -1,0 +1,36 @@
+namespace: uptime
+groups:
+- name: alert.rules
+  rules:
+  - alert: EndpointDown
+    expr: probe_http_status_code{} > 200
+    for: 30s
+    labels:
+      severity: critical
+      type: uptime
+    annotations:
+      messageFiring: "{{ $labels.target }} is Down . Reason: HTTP  {{ $value }} ( {{ $labels.instance }} )."
+      value: "{{ $value }}"
+      messageResolved: "{{ $labels.target }} is UP. ( {{ $labels.instance }} )"
+
+  - alert: SSLCertExpiration
+    expr: round((probe_ssl_earliest_cert_expiry{} - time()) / 86400) < 30
+    for: 30s
+    labels:
+      severity: warning
+      type: uptime
+    annotations:
+      messageFiring: "{{ $labels.target }} with Endpoint's URL : {{ $labels.instance }} SSL Certificate will be expired in {{ $value }} Days"
+      value: "{{ $value }}"
+      messageResolved: "{{ $labels.target }} with Endpoint's URL : {{ $labels.instance }} SSL Certificate has been renewed"
+
+  - alert: SSLCertExpiration
+    expr: round((probe_ssl_earliest_cert_expiry{} - time()) / 86400) < 7
+    for: 30s
+    labels:
+      severity: critical
+      type: uptime
+    annotations:
+      messageFiring: "{{ $labels.target }} with Endpoint's URL : {{ $labels.instance }} SSL Certificate will be expired in {{ $value }} Days"
+      value: "{{ $value }}"
+      messageResolved: "{{ $labels.target }} with Endpoint's URL : {{ $labels.instance }} SSL Certificate has been renewed"

@@ -1,0 +1,548 @@
+# Mimir Configuration for EKS Production Cluster
+# Domain: spicybiryaniwala.shop
+# Cluster: eks-prod
+
+mimir-distributed:
+  admin-cache:
+    enabled: true
+    replicas: 3
+  admin_api:
+    replicas: 1
+  alertmanager:
+    persistentVolume:
+      enabled: true
+      size: 10Gi
+      storageClassName: gp3
+    replicas: 3
+    resources:
+      limits:
+        memory: 1Gi
+        cpu: 500m
+      requests:
+        memory: 512Mi
+        cpu: 200m
+    statefulSet:
+      enabled: true
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+
+  chunks-cache:
+    allocatedMemory: 4096
+    enabled: true
+    maxItemMemory: 20
+    replicas: 3
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 500m
+      requests:
+        memory: 1Gi
+        cpu: 200m
+
+  compactor:
+    persistentVolume:
+      size: 50Gi
+      storageClassName: gp3
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+    resources:
+      limits:
+        memory: 8Gi
+        cpu: 2000m
+      requests:
+        memory: 4Gi
+        cpu: 1000m
+    replicas: 2
+
+  continuous_test:
+    auth:
+      password: SpicyBiryani2024!
+      tenant: _spicy_prod
+      type: basicAuth
+    enabled: false
+    maxQueryAge: 48h
+    numSeries: 100000
+    runInterval: 10s
+
+  distributor:
+    extraArgs:
+      distributor.ingestion-rate-limit: "500000"
+    replicas: 5
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 2000m
+      requests:
+        memory: 2Gi
+        cpu: 1000m
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+
+  gateway:
+    replicas: 3
+    resources:
+      limits:
+        memory: 256Mi
+        cpu: 500m
+      requests:
+        memory: 128Mi
+        cpu: 100m
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/rate-limit: "1000"
+        nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+      hosts:
+        - host: mimir.spicybiryaniwala.shop
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: mimir-tls
+          hosts:
+            - mimir.spicybiryaniwala.shop
+
+  image:
+    repository: grafana/mimir
+    tag: 3.0.0
+
+  index-cache:
+    enabled: true
+    replicas: 3
+    allocatedMemory: 2048
+    maxItemMemory: 10
+    resources:
+      limits:
+        memory: 1Gi
+        cpu: 500m
+      requests:
+        memory: 512Mi
+        cpu: 200m
+
+  ingester:
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                    - ingester
+            topologyKey: kubernetes.io/hostname
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+    extraArgs:
+      ingester.max-global-series-per-metric: "100000"
+      ingester.max-global-series-per-user: "20000000"
+    persistentVolume:
+      size: 50Gi
+      storageClassName: gp3
+    replicas: 6
+    resources:
+      limits:
+        memory: 16Gi
+        cpu: 4000m
+      requests:
+        memory: 8Gi
+        cpu: 2000m
+    zoneAwareReplication:
+      enabled: true
+
+  memcached:
+    image:
+      repository: memcached
+      tag: 1.6.22-alpine
+
+  memcachedExporter:
+    enabled: true
+
+  metaMonitoring:
+    serviceMonitor:
+      clusterLabel: eks-prod
+      enabled: true
+      labels:
+        release: monitor
+        app: mimir
+
+  metadata-cache:
+    enabled: true
+    replicas: 3
+    allocatedMemory: 1024
+    maxItemMemory: 5
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 200m
+      requests:
+        memory: 256Mi
+        cpu: 100m
+
+  mimir:
+    config: |
+      usage_stats:
+        installation_mode: helm
+      multitenancy_enabled: true
+      activity_tracker:
+        filepath: /active-query-tracker/activity.log
+
+      alertmanager:
+        data_dir: /data
+        enable_api: true
+        external_url: /alertmanager
+        fallback_config_file: /configs/alertmanager_fallback_config.yaml
+
+      alertmanager_storage:
+        backend: s3
+        s3:
+          region: us-east-1
+          bucket_name: spicy-mimir-alertmanager-prod
+
+      blocks_storage:
+        backend: s3
+        s3:
+          region: us-east-1
+          bucket_name: spicy-mimir-blocks-prod
+        bucket_store:
+          {{- if index .Values "chunks-cache" "enabled" }}
+          chunks_cache:
+            backend: memcached
+            memcached:
+              addresses: {{ include "mimir.chunksCacheAddress" . }}
+              max_item_size: {{ mul (index .Values "chunks-cache").maxItemMemory 1024 1024 }}
+              timeout: 450ms
+              max_idle_connections: 150
+          {{- end }}
+          {{- if index .Values "index-cache" "enabled" }}
+          index_cache:
+            backend: memcached
+            memcached:
+              addresses: {{ include "mimir.indexCacheAddress" . }}
+              max_item_size: {{ mul (index .Values "index-cache").maxItemMemory 1024 1024 }}
+              max_idle_connections: 150
+          {{- end }}
+          {{- if index .Values "metadata-cache" "enabled" }}
+          metadata_cache:
+            backend: memcached
+            memcached:
+              addresses: {{ include "mimir.metadataCacheAddress" . }}
+              max_item_size: {{ mul (index .Values "metadata-cache").maxItemMemory 1024 1024 }}
+              max_idle_connections: 150
+          {{- end }}
+          sync_dir: /data/tsdb-sync
+        tsdb:
+          dir: /data/tsdb
+
+      compactor:
+        compaction_interval: 30m
+        deletion_delay: 2h
+        max_closing_blocks_concurrency: 4
+        max_opening_blocks_concurrency: 8
+        symbols_flushers_concurrency: 8
+        data_dir: "/data"
+        sharding_ring:
+          wait_stability_min_duration: 1m
+
+      frontend:
+        log_queries_longer_than: 1m
+        parallelize_shardable_queries: true
+        {{- if index .Values "results-cache" "enabled" }}
+        results_cache:
+          backend: memcached
+          memcached:
+            timeout: 500ms
+            addresses: {{ include "mimir.resultsCacheAddress" . }}
+            max_item_size: {{ mul (index .Values "results-cache").maxItemMemory 1024 1024 }}
+        cache_results: true
+        {{- end }}
+        {{- if .Values.query_scheduler.enabled }}
+        scheduler_address: {{ template "mimir.fullname" . }}-query-scheduler-headless.{{ .Release.Namespace }}.svc:{{ include "mimir.serverGrpcListenPort" . }}
+        {{- end }}
+
+      frontend_worker:
+        grpc_client_config:
+          max_send_msg_size: 419430400
+        {{- if .Values.query_scheduler.enabled }}
+        scheduler_address: {{ template "mimir.fullname" . }}-query-scheduler-headless.{{ .Release.Namespace }}.svc:{{ include "mimir.serverGrpcListenPort" . }}
+        {{- else }}
+        frontend_address: {{ template "mimir.fullname" . }}-query-frontend-headless.{{ .Release.Namespace }}.svc:{{ include "mimir.serverGrpcListenPort" . }}
+        {{- end }}
+
+      ingester:
+        ring:
+          final_sleep: 0s
+          num_tokens: 512
+          tokens_file_path: /data/tokens
+          unregister_on_shutdown: false
+          zone_awareness_enabled: true
+          replication_factor: 3
+
+      ingester_client:
+        grpc_client_config:
+          max_recv_msg_size: 104857600
+          max_send_msg_size: 104857600
+
+      limits:
+        max_label_names_per_series: 120
+        max_global_series_per_user: 20000000
+        max_global_series_per_metric: 100000
+        ingestion_rate: 500000
+        ingestion_burst_size: 1000000
+        out_of_order_time_window: 1h
+        ruler_max_rules_per_rule_group: 100
+        ruler_max_rule_groups_per_tenant: 500
+        compactor_blocks_retention_period: 90d
+        accept_ha_samples: true
+        ha_cluster_label: cluster
+
+      memberlist:
+        abort_if_cluster_join_fails: false
+        compression_enabled: false
+        cluster_label: "mimir-distributed-gossip-ring.monitoring.svc.cluster.local"
+        cluster_label_verification_disabled: true
+        bind_addr:
+        - ${MY_POD_IP}
+        join_members:
+        - dns+mimir-distributed-gossip-ring:7946
+
+      querier:
+        max_concurrent: 32
+
+      query_scheduler:
+        max_outstanding_requests_per_tenant: 1600
+
+      ruler:
+        alertmanager_url: dnssrvnoa+http://_http-metrics._tcp.{{ template "mimir.fullname" . }}-alertmanager-headless.{{ .Release.Namespace }}.svc.{{ .Values.global.clusterDomain }}/alertmanager
+        enable_api: true
+        rule_path: /data
+
+      ruler_storage:
+        backend: s3
+        s3:
+          region: us-east-1
+          bucket_name: spicy-mimir-ruler-prod
+
+      runtime_config:
+        file: /var/{{ include "mimir.name" . }}/runtime.yaml
+
+      distributor:
+        instance_limits:
+          max_ingestion_rate: 500000
+          max_inflight_push_requests: 5000
+        ha_tracker:
+          enable_ha_tracker: true
+          kvstore:
+            store: memberlist
+
+      server:
+        grpc_server_max_concurrent_streams: 1000
+
+      store_gateway:
+        sharding_ring:
+          wait_stability_min_duration: 1m
+          zone_awareness_enabled: true
+          replication_factor: 3
+
+  minio:
+    enabled: false
+
+  nginx:
+    basicAuth:
+      enabled: true
+      password: SpicyBiryani2024!
+      username: observe
+    replicas: 3
+
+  overrides_exporter:
+    replicas: 1
+    resources:
+      limits:
+        memory: 256Mi
+        cpu: 200m
+      requests:
+        memory: 128Mi
+        cpu: 100m
+
+  querier:
+    extraArgs:
+      querier.max-fetched-chunks-per-query: "8000000"
+    replicas: 6
+    resources:
+      limits:
+        memory: 8Gi
+        cpu: 2000m
+      requests:
+        memory: 4Gi
+        cpu: 1000m
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+
+  query_frontend:
+    replicas: 3
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+      requests:
+        memory: 1Gi
+        cpu: 500m
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+
+  query_scheduler:
+    enabled: true
+    replicas: 3
+    resources:
+      limits:
+        memory: 1Gi
+        cpu: 500m
+      requests:
+        memory: 512Mi
+        cpu: 200m
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+
+  rbac:
+    type: null
+    usePodSecurityPolicy: false
+
+  results-cache:
+    enabled: true
+    replicas: 3
+    allocatedMemory: 2048
+    maxItemMemory: 10
+    resources:
+      limits:
+        memory: 1Gi
+        cpu: 500m
+      requests:
+        memory: 512Mi
+        cpu: 200m
+
+  rollout_operator:
+    enabled: false
+
+  ruler:
+    replicas: 3
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+      requests:
+        memory: 1Gi
+        cpu: 500m
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+
+  runtimeConfig:
+    ingester_limits:
+      max_inflight_push_requests: 5000
+      max_ingestion_rate: 500000
+      max_series: 20000000
+
+  store_gateway:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - store-gateway
+              topologyKey: kubernetes.io/hostname
+    nodeSelector:
+      node-type: monitoring
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: workloadType
+        operator: Equal
+        value: monitoring
+        effect: NoSchedule
+    persistentVolume:
+      size: 20Gi
+      storageClassName: gp3
+    replicas: 6
+    resources:
+      limits:
+        memory: 8Gi
+        cpu: 2000m
+      requests:
+        memory: 4Gi
+        cpu: 1000m
+    zoneAwareReplication:
+      enabled: true
+
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/mimir-eks-role
+    automountServiceAccountToken: true
+    create: true
+    imagePullSecrets: []
+    labels: {}
+    name: null
+
+  global:
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: AWS_REGION
+      value: us-east-1

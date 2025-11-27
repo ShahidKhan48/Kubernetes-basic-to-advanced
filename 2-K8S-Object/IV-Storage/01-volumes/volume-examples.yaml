@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-volume-pod
+  labels:
+    app: volume-demo
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    
+    volumeMounts:
+    # Static content from hostPath
+    - name: static-content
+      mountPath: /usr/share/nginx/html
+    
+    # Nginx config from ConfigMap
+    - name: nginx-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+    
+    # SSL certificates from Secret
+    - name: ssl-certs
+      mountPath: /etc/ssl/certs
+      readOnly: true
+    
+    # Logs to emptyDir (shared with sidecar)
+    - name: nginx-logs
+      mountPath: /var/log/nginx
+    
+    # Temporary files
+    - name: tmp-storage
+      mountPath: /tmp
+  
+  # Sidecar container for log processing
+  - name: log-processor
+    image: busybox
+    command: ["sh", "-c"]
+    args:
+    - |
+      while true; do
+        if [ -f /logs/access.log ]; then
+          echo "Processing access logs at $(date)"
+          tail -n 10 /logs/access.log
+        fi
+        sleep 30
+      done
+    
+    volumeMounts:
+    - name: nginx-logs
+      mountPath: /logs
+  
+  volumes:
+  # emptyDir for temporary shared storage
+  - name: nginx-logs
+    emptyDir:
+      sizeLimit: 1Gi
+  
+  - name: tmp-storage
+    emptyDir:
+      medium: Memory  # Use tmpfs (RAM)
+      sizeLimit: 512Mi
+  
+  # hostPath for persistent local storage
+  - name: static-content
+    hostPath:
+      path: /data/spicybiryaniwala/html
+      type: DirectoryOrCreate
+  
+  # ConfigMap volume
+  - name: nginx-config
+    configMap:
+      name: nginx-config
+      items:
+      - key: nginx.conf
+        path: nginx.conf
+  
+  # Secret volume
+  - name: ssl-certs
+    secret:
+      secretName: ssl-certificates
+      defaultMode: 0400  # Read-only for owner
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+        
+        access_log /var/log/nginx/access.log main;
+        error_log /var/log/nginx/error.log;
+        
+        server {
+            listen 80;
+            server_name spicybiryaniwala.shop;
+            
+            location / {
+                root /usr/share/nginx/html;
+                index index.html index.htm;
+            }
+            
+            location /health {
+                return 200 "OK";
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ssl-certificates
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...  # Base64 encoded certificate
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t...  # Base64 encoded private key
+---
+# Deployment using volumes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-with-volumes
+  labels:
+    app: web-app-volumes
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app-volumes
+  template:
+    metadata:
+      labels:
+        app: web-app-volumes
+    spec:
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        volumeMounts:
+        # Application config
+        - name: app-config
+          mountPath: /etc/app
+        
+        # Application secrets
+        - name: app-secrets
+          mountPath: /etc/secrets
+          readOnly: true
+        
+        # Cache directory (emptyDir)
+        - name: cache-volume
+          mountPath: /app/cache
+        
+        # Logs directory (emptyDir)
+        - name: logs-volume
+          mountPath: /app/logs
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      
+      volumes:
+      - name: app-config
+        configMap:
+          name: app-config
+      
+      - name: app-secrets
+        secret:
+          secretName: app-secrets
+      
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 2Gi
+      
+      - name: logs-volume
+        emptyDir:
+          sizeLimit: 1Gi

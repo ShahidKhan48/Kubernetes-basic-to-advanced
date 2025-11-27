@@ -1,0 +1,742 @@
+# CronJobs Examples - Production Ready Configurations
+
+---
+# Basic CronJob Example - Daily Database Backup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-database-backup
+  labels:
+    app: db-backup
+    component: backup
+spec:
+  # Run daily at 2:00 AM UTC
+  schedule: "0 2 * * *"
+  
+  # Keep last 3 successful jobs and 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  # Don't start new job if previous one is still running
+  concurrencyPolicy: Forbid
+  
+  # Start job within 10 minutes of scheduled time
+  startingDeadlineSeconds: 600
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: db-backup
+        component: backup
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600  # 1 hour timeout
+      
+      template:
+        metadata:
+          labels:
+            app: db-backup
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          
+          containers:
+          - name: backup-runner
+            image: postgres:13
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Starting daily database backup..."
+              
+              # Create backup with timestamp
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="daily_backup_${TIMESTAMP}.sql"
+              
+              # Perform backup
+              pg_dump $DATABASE_URL > /backups/$BACKUP_FILE
+              
+              # Compress backup
+              gzip /backups/$BACKUP_FILE
+              
+              # Upload to S3
+              aws s3 cp /backups/$BACKUP_FILE.gz s3://$S3_BUCKET/daily-backups/
+              
+              # Clean up local backup
+              rm /backups/$BACKUP_FILE.gz
+              
+              echo "Daily backup completed: $BACKUP_FILE.gz"
+            
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: url
+            - name: S3_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: backup-config
+                  key: s3-bucket
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: secret-access-key
+            
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "200m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          
+          volumes:
+          - name: backup-storage
+            emptyDir:
+              sizeLimit: 5Gi
+          
+          nodeSelector:
+            workload-type: batch
+
+---
+# Hourly Log Cleanup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hourly-log-cleanup
+  labels:
+    app: log-cleanup
+    component: maintenance
+spec:
+  # Run every hour at minute 0
+  schedule: "0 * * * *"
+  
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 2
+  concurrencyPolicy: Replace  # Replace running job with new one
+  startingDeadlineSeconds: 300
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: log-cleanup
+        component: maintenance
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 1
+      activeDeadlineSeconds: 900  # 15 minutes
+      
+      template:
+        metadata:
+          labels:
+            app: log-cleanup
+            component: maintenance
+        spec:
+          restartPolicy: Never
+          serviceAccountName: log-cleanup-sa
+          
+          containers:
+          - name: log-cleaner
+            image: busybox:1.35
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting hourly log cleanup..."
+              
+              # Clean up application logs older than 1 hour
+              find /app/logs -name "*.log" -type f -mmin +60 -delete
+              
+              # Clean up temporary files
+              find /tmp -name "*.tmp" -type f -mmin +30 -delete
+              
+              # Report disk usage
+              echo "Current disk usage:"
+              df -h /app/logs /tmp
+              
+              echo "Hourly cleanup completed"
+            
+            resources:
+              requests:
+                memory: "32Mi"
+                cpu: "25m"
+              limits:
+                memory: "64Mi"
+                cpu: "50m"
+            
+            volumeMounts:
+            - name: app-logs
+              mountPath: /app/logs
+            - name: tmp-storage
+              mountPath: /tmp
+          
+          volumes:
+          - name: app-logs
+            hostPath:
+              path: /var/log/applications
+          - name: tmp-storage
+            hostPath:
+              path: /tmp
+
+---
+# Weekly Report Generation CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-report-generation
+  labels:
+    app: report-generator
+    component: analytics
+spec:
+  # Run every Sunday at 3:00 AM UTC
+  schedule: "0 3 * * 0"
+  
+  successfulJobsHistoryLimit: 4  # Keep 4 weeks of history
+  failedJobsHistoryLimit: 2
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800  # 30 minutes
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: report-generator
+        component: analytics
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200  # 2 hours
+      
+      template:
+        metadata:
+          labels:
+            app: report-generator
+            component: analytics
+        spec:
+          restartPolicy: OnFailure
+          
+          containers:
+          - name: report-generator
+            image: mycompany/report-generator:v2.1.0
+            command:
+            - python3
+            - generate_weekly_report.py
+            - --start-date=$(date -d '7 days ago' +%Y-%m-%d)
+            - --end-date=$(date -d '1 day ago' +%Y-%m-%d)
+            - --output-format=pdf
+            - --email-recipients=/config/recipients.txt
+            
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-db-secret
+                  key: url
+            - name: SMTP_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: email-config
+                  key: smtp-host
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: email-credentials
+                  key: username
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: email-credentials
+                  key: password
+            - name: S3_REPORTS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: report-config
+                  key: s3-bucket
+            
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "300m"
+              limits:
+                memory: "1Gi"
+                cpu: "600m"
+            
+            volumeMounts:
+            - name: report-config
+              mountPath: /config
+              readOnly: true
+            - name: temp-reports
+              mountPath: /tmp/reports
+          
+          volumes:
+          - name: report-config
+            configMap:
+              name: report-config
+          - name: temp-reports
+            emptyDir:
+              sizeLimit: 2Gi
+          
+          nodeSelector:
+            node-type: compute-optimized
+
+---
+# Monthly Data Archival CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: monthly-data-archival
+  labels:
+    app: data-archival
+    component: storage
+spec:
+  # Run on the 1st day of every month at 1:00 AM UTC
+  schedule: "0 1 1 * *"
+  
+  successfulJobsHistoryLimit: 12  # Keep 1 year of history
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600  # 1 hour
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: data-archival
+        component: storage
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 1
+      activeDeadlineSeconds: 14400  # 4 hours
+      
+      template:
+        metadata:
+          labels:
+            app: data-archival
+            component: storage
+        spec:
+          restartPolicy: Never
+          
+          containers:
+          - name: archival-processor
+            image: mycompany/data-archival:v1.3.0
+            command:
+            - python3
+            - archive_monthly_data.py
+            - --archive-date=$(date -d '1 month ago' +%Y-%m-01)
+            - --compression=gzip
+            - --verification=checksum
+            
+            env:
+            - name: SOURCE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: source-db-secret
+                  key: url
+            - name: ARCHIVE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: archive-db-secret
+                  key: url
+            - name: S3_ARCHIVE_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: archival-config
+                  key: s3-bucket
+            - name: GLACIER_STORAGE_CLASS
+              value: "GLACIER"
+            
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+            
+            volumeMounts:
+            - name: temp-archive
+              mountPath: /tmp/archive
+            - name: archival-config
+              mountPath: /app/config
+              readOnly: true
+          
+          volumes:
+          - name: temp-archive
+            emptyDir:
+              sizeLimit: 10Gi
+          - name: archival-config
+            configMap:
+              name: archival-config
+          
+          # Prefer nodes with high network bandwidth
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                  - key: node-type
+                    operator: In
+                    values:
+                    - network-optimized
+
+---
+# Health Check CronJob - Every 5 minutes
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: health-check-monitor
+  labels:
+    app: health-monitor
+    component: monitoring
+spec:
+  # Run every 5 minutes
+  schedule: "*/5 * * * *"
+  
+  successfulJobsHistoryLimit: 10
+  failedJobsHistoryLimit: 5
+  concurrencyPolicy: Allow  # Allow multiple health checks
+  startingDeadlineSeconds: 60
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: health-monitor
+        component: monitoring
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 1
+      activeDeadlineSeconds: 240  # 4 minutes
+      
+      template:
+        metadata:
+          labels:
+            app: health-monitor
+            component: monitoring
+        spec:
+          restartPolicy: Never
+          
+          containers:
+          - name: health-checker
+            image: curlimages/curl:7.85.0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting health checks..."
+              
+              # Check API endpoints
+              for endpoint in $API_ENDPOINTS; do
+                echo "Checking $endpoint..."
+                if curl -f -s --max-time 10 "$endpoint/health" > /dev/null; then
+                  echo "✓ $endpoint is healthy"
+                else
+                  echo "✗ $endpoint is unhealthy"
+                  # Send alert to monitoring system
+                  curl -X POST "$ALERT_WEBHOOK" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"service\":\"$endpoint\",\"status\":\"unhealthy\",\"timestamp\":\"$(date -Iseconds)\"}"
+                fi
+              done
+              
+              echo "Health checks completed"
+            
+            env:
+            - name: API_ENDPOINTS
+              valueFrom:
+                configMapKeyRef:
+                  name: health-check-config
+                  key: api-endpoints
+            - name: ALERT_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: monitoring-secrets
+                  key: alert-webhook
+            
+            resources:
+              requests:
+                memory: "32Mi"
+                cpu: "25m"
+              limits:
+                memory: "64Mi"
+                cpu: "50m"
+
+---
+# Certificate Renewal CronJob - Daily Check
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: certificate-renewal-check
+  labels:
+    app: cert-renewal
+    component: security
+spec:
+  # Run daily at 4:00 AM UTC
+  schedule: "0 4 * * *"
+  
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: cert-renewal
+        component: security
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800  # 30 minutes
+      
+      template:
+        metadata:
+          labels:
+            app: cert-renewal
+            component: security
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: cert-manager-sa
+          
+          containers:
+          - name: cert-checker
+            image: certbot/certbot:v1.32.0
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Checking certificate expiration..."
+              
+              # Check certificates expiring in next 30 days
+              certbot certificates --cert-name $CERT_NAME
+              
+              # Renew if needed (certbot handles the logic)
+              certbot renew --dry-run
+              
+              if [ $? -eq 0 ]; then
+                echo "Certificate renewal check passed"
+                # Actual renewal (remove --dry-run for production)
+                # certbot renew --quiet
+              else
+                echo "Certificate renewal check failed"
+                exit 1
+              fi
+            
+            env:
+            - name: CERT_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: cert-config
+                  key: cert-name
+            
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+            
+            volumeMounts:
+            - name: letsencrypt-config
+              mountPath: /etc/letsencrypt
+            - name: cert-challenges
+              mountPath: /var/lib/letsencrypt
+          
+          volumes:
+          - name: letsencrypt-config
+            persistentVolumeClaim:
+              claimName: letsencrypt-config-pvc
+          - name: cert-challenges
+            persistentVolumeClaim:
+              claimName: cert-challenges-pvc
+
+---
+# Performance Metrics Collection CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: performance-metrics-collection
+  labels:
+    app: metrics-collector
+    component: monitoring
+spec:
+  # Run every 15 minutes
+  schedule: "*/15 * * * *"
+  
+  successfulJobsHistoryLimit: 20
+  failedJobsHistoryLimit: 5
+  concurrencyPolicy: Replace
+  startingDeadlineSeconds: 300
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: metrics-collector
+        component: monitoring
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 1
+      activeDeadlineSeconds: 600  # 10 minutes
+      
+      template:
+        metadata:
+          labels:
+            app: metrics-collector
+            component: monitoring
+        spec:
+          restartPolicy: Never
+          
+          containers:
+          - name: metrics-collector
+            image: mycompany/metrics-collector:v1.1.0
+            command:
+            - python3
+            - collect_metrics.py
+            - --interval=15m
+            - --output-format=prometheus
+            
+            env:
+            - name: PROMETHEUS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: monitoring-config
+                  key: prometheus-url
+            - name: GRAFANA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-credentials
+                  key: api-key
+            - name: METRICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: metrics-db-secret
+                  key: url
+            
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+            
+            volumeMounts:
+            - name: metrics-config
+              mountPath: /app/config
+              readOnly: true
+          
+          volumes:
+          - name: metrics-config
+            configMap:
+              name: metrics-collection-config
+
+---
+# Seasonal Data Processing CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: seasonal-data-processing
+  labels:
+    app: seasonal-processor
+    component: analytics
+spec:
+  # Run quarterly on the 1st day at 2:00 AM UTC (Jan, Apr, Jul, Oct)
+  schedule: "0 2 1 1,4,7,10 *"
+  
+  successfulJobsHistoryLimit: 4  # Keep 1 year
+  failedJobsHistoryLimit: 2
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 7200  # 2 hours
+  
+  jobTemplate:
+    metadata:
+      labels:
+        app: seasonal-processor
+        component: analytics
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 1
+      activeDeadlineSeconds: 28800  # 8 hours
+      
+      template:
+        metadata:
+          labels:
+            app: seasonal-processor
+            component: analytics
+        spec:
+          restartPolicy: Never
+          
+          containers:
+          - name: seasonal-processor
+            image: mycompany/seasonal-analytics:v2.0.0
+            command:
+            - python3
+            - process_seasonal_data.py
+            - --quarter=$(date +%q)
+            - --year=$(date +%Y)
+            - --generate-trends
+            - --create-forecasts
+            
+            env:
+            - name: DATA_WAREHOUSE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: warehouse-secret
+                  key: url
+            - name: ML_MODEL_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: ml-config
+                  key: model-bucket
+            
+            resources:
+              requests:
+                memory: "2Gi"
+                cpu: "1000m"
+              limits:
+                memory: "4Gi"
+                cpu: "2000m"
+            
+            volumeMounts:
+            - name: temp-processing
+              mountPath: /tmp/processing
+            - name: model-cache
+              mountPath: /app/models
+          
+          volumes:
+          - name: temp-processing
+            emptyDir:
+              sizeLimit: 20Gi
+          - name: model-cache
+            persistentVolumeClaim:
+              claimName: ml-model-cache-pvc
+          
+          # Require high-performance nodes
+          nodeSelector:
+            node-type: compute-optimized
+          
+          tolerations:
+          - key: high-compute
+            operator: Equal
+            value: "true"
+            effect: NoSchedule

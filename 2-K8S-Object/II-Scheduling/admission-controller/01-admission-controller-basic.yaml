@@ -1,0 +1,171 @@
+# ValidatingAdmissionWebhook Example
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionWebhook
+metadata:
+  name: pod-security-validator
+webhooks:
+- name: pod-security.example.com
+  clientConfig:
+    service:
+      name: pod-security-webhook
+      namespace: webhook-system
+      path: "/validate"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Fail
+
+---
+# MutatingAdmissionWebhook Example
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionWebhook
+metadata:
+  name: pod-defaults-injector
+webhooks:
+- name: pod-defaults.example.com
+  clientConfig:
+    service:
+      name: pod-defaults-webhook
+      namespace: webhook-system
+      path: "/mutate"
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Fail
+
+---
+# Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-security-webhook
+  namespace: webhook-system
+spec:
+  selector:
+    app: pod-security-webhook
+  ports:
+  - port: 443
+    targetPort: 8443
+    protocol: TCP
+
+---
+# Webhook Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-security-webhook
+  namespace: webhook-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pod-security-webhook
+  template:
+    metadata:
+      labels:
+        app: pod-security-webhook
+    spec:
+      containers:
+      - name: webhook
+        image: webhook-server:latest
+        ports:
+        - containerPort: 8443
+        env:
+        - name: TLS_CERT_FILE
+          value: "/etc/certs/tls.crt"
+        - name: TLS_PRIVATE_KEY_FILE
+          value: "/etc/certs/tls.key"
+        volumeMounts:
+        - name: certs
+          mountPath: /etc/certs
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: certs
+        secret:
+          secretName: webhook-certs
+
+---
+# Pod Security Policy (Deprecated but example)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: restricted-psp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+
+---
+# Network Policy for Admission Controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook-network-policy
+  namespace: webhook-system
+spec:
+  podSelector:
+    matchLabels:
+      app: pod-security-webhook
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8443
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: UDP
+      port: 53
+
+---
+# ResourceQuota with Admission Controller Scope
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: admission-controlled-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+  scopes: ["NotBestEffort"]

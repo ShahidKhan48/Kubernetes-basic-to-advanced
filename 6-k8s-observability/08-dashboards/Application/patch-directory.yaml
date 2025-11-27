@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-suspicious-activity.json-suspicious-activity
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-ntc-metrics.json-ntc-metrics
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-qr-sdk-onboarding.json-qr-sdk-onboarding
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-mastodon-stats.json-mastodon-stats
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-ingress-source-ip.json-ingress-source-ip
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-4xx-and-5xx-error.json-4xx-and-5xx-error
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-autosweep-response.json-autosweep-response
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-payment-gateway-requests.json-payment-gateway-requests
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-kirana-health-v2.json-kirana-health-v2
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-k8s-applications.json-k8s-applications
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-iam-otp.json-iam-otp
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-status-code-count-dashboard.json-status-code-count-dashboard
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-jvm-micrometer.json-jvm-micrometer
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-kyc-application.json-kyc-application
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-application-health-dashboard-vm.json-application-health-dashboard-vm
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-logging-dashboard-via-loki.json-logging-dashboard-via-loki
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-custom-error-metric.json-custom-error-metric
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-gateway-dashboard.json-gateway-dashboard
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-workflow-api.json-workflow-api
+  annotations:
+    grafana_folder: "Application"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-application-cdc-service.json-cdc-service
+  annotations:
+    grafana_folder: "Application"
+---
+

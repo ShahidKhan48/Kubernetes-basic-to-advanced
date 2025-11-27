@@ -1,0 +1,226 @@
+# Grafana Configuration Changes Documentation
+# EKS Production Cluster - spicybiryaniwala.shop Domain
+
+## FILES MODIFIED:
+1. example.yaml → example-eks-prod.yaml
+2. grafana-values.yml → grafana-values-eks-prod.yml
+
+## TOTAL CONFIGURATION STEPS: 15
+
+## CHANGES MADE:
+
+### STEP 1: DOMAIN CONFIGURATION
+CHANGED:
+- Domain: ninjacart.in → spicybiryaniwala.shop
+- URLs: All monitoring URLs updated to spicybiryaniwala.shop
+- Grafana URL: grafana.spicybiryaniwala.shop
+
+LOCATIONS:
+- server.domain
+- server.root_url
+- auth.google.allowed_domains
+- auth.google.hosted_domain
+- ingress.hosts
+- ingress.tls.hosts
+
+### STEP 2: CLUSTER IDENTIFICATION
+CHANGED:
+- Cluster name: monitoring → eks-prod
+- Environment labels: Added production tags
+- External labels: cluster: eks-prod, environment: production
+
+LOCATIONS:
+- prometheus.prometheusSpec.externalLabels
+- podLabels.cluster
+
+### STEP 3: DATASOURCE URLS
+CHANGED:
+- Mimir URL: https://mimir-gcp.ninjacart.in → https://mimir.spicybiryaniwala.shop
+- Loki URL: https://loki-gcp.ninjacart.in → https://loki.spicybiryaniwala.shop
+- Tempo URL: https://tempo-gcp.ninjacart.in → https://tempo.spicybiryaniwala.shop
+
+LOCATIONS:
+- additionalDataSources[].url (all datasources)
+
+### STEP 4: AUTHENTICATION HEADERS
+CHANGED:
+- X-Scope-OrgID: _trader_dev → _spicy_prod
+- X-Scope-OrgID: _snd_prod → _spicy_prod
+- All tenant IDs unified to _spicy_prod
+
+LOCATIONS:
+- secureJsonData.httpHeaderValue1 (all datasources)
+- prometheus.remoteWrite.headers.X-Scope-OrgID
+
+### STEP 5: DATABASE CONFIGURATION
+CHANGED:
+- Database host: nc-data-platform-db.postgres.database.azure.com → spicy-prod-db.postgres.database.azure.com
+- Database user: dataplatform_db_admin → grafana_admin
+- Database password: Updated for production
+
+LOCATIONS:
+- grafana.ini.database.host
+- grafana.ini.database.user
+- grafana.ini.database.password
+
+### STEP 6: GOOGLE OAUTH CONFIGURATION
+CHANGED:
+- Allowed domains: ninjacart.com ninjacart.in → spicybiryaniwala.shop
+- Hosted domain: ninjacart.com → spicybiryaniwala.shop
+- Client ID/Secret: Updated for spicybiryaniwala.shop
+
+LOCATIONS:
+- auth.google.allowed_domains
+- auth.google.hosted_domain
+- auth.google.client_id
+- auth.google.client_secret
+
+### STEP 7: RESOURCE ALLOCATION
+CHANGED:
+- Replicas: 2 → 3 (for production HA)
+- CPU requests: 100m → 200m
+- Memory requests: 256Mi → 512Mi
+- CPU limits: 500m → 1000m
+- Memory limits: 512Mi → 1Gi
+
+LOCATIONS:
+- replicas
+- resources.requests
+- resources.limits
+
+### STEP 8: STORAGE CONFIGURATION
+CHANGED:
+- Storage size: 1Gi → 50Gi (production storage)
+- Storage class: "" → gp3 (AWS EBS GP3)
+- Prometheus storage: Added 100Gi for metrics
+
+LOCATIONS:
+- persistence.size
+- persistence.storageClassName
+- prometheus.prometheusSpec.storageSpec
+
+### STEP 9: EKS IAM INTEGRATION
+ADDED:
+- ServiceAccount annotations with EKS IAM roles
+- Grafana role: arn:aws:iam::123456789012:role/grafana-eks-role
+- Prometheus role: arn:aws:iam::123456789012:role/prometheus-eks-role
+
+LOCATIONS:
+- serviceAccount.annotations.eks.amazonaws.com/role-arn
+
+### STEP 10: NODE SCHEDULING
+ADDED:
+- Node selector: node-type: monitoring
+- Tolerations: workloadType=monitoring
+- Pod anti-affinity for HA
+
+LOCATIONS:
+- nodeSelector
+- tolerations
+- affinity.podAntiAffinity
+
+### STEP 11: INGRESS CONFIGURATION
+CHANGED:
+- Ingress class: Added nginx
+- Rate limiting: Added 100 requests/minute
+- SSL redirect: Enforced HTTPS
+
+LOCATIONS:
+- ingress.ingressClassName
+- ingress.annotations
+
+### STEP 12: DATASOURCE NAMES
+CHANGED:
+- "Mimir Trader DEV" → "Mimir Spicy PROD"
+- "Loki Trader DEV" → "Loki Spicy PROD"
+- "Tempo Trader DEV" → "Tempo Spicy PROD"
+- "Alertmanager Trader DEV" → "Alertmanager Spicy PROD"
+
+LOCATIONS:
+- additionalDataSources[].name
+
+### STEP 13: DATASOURCE UIDs
+CHANGED:
+- mimir_ds_trader_dev → mimir_ds_spicy_prod
+- loki_ds_trader_dev → loki_ds_spicy_prod
+- tempo_ds_trader_dev → tempo_ds_spicy_prod
+- alertmanager_ds_trader_dev → alertmanager_ds_spicy_prod
+
+LOCATIONS:
+- additionalDataSources[].uid
+
+### STEP 14: MONITORING NAMESPACE
+CHANGED:
+- Search namespace: observe → monitoring
+- Sidecar namespace: observe → monitoring
+
+LOCATIONS:
+- sidecar.dashboards.searchNamespace
+
+### STEP 15: SECURITY HARDENING
+ADDED:
+- Rate limiting on ingress
+- SSL enforcement
+- Resource limits
+- Security contexts
+- Pod disruption budgets
+
+## WHAT NEEDS TO BE MANAGED:
+
+### MANUAL CONFIGURATION REQUIRED:
+1. **Secrets Management** (HIGH PRIORITY):
+   - Create Kubernetes secrets for passwords
+   - Google OAuth client ID/secret
+   - Database passwords
+   - Datasource authentication
+
+2. **DNS Configuration** (HIGH PRIORITY):
+   - Configure spicybiryaniwala.shop DNS records
+   - Point subdomains to load balancer
+
+3. **Certificate Management** (HIGH PRIORITY):
+   - Setup cert-manager
+   - Configure Let's Encrypt issuer
+   - Verify SSL certificates
+
+4. **Database Setup** (MEDIUM PRIORITY):
+   - Create PostgreSQL database
+   - Setup database user and permissions
+   - Configure SSL connection
+
+5. **EKS IAM Roles** (MEDIUM PRIORITY):
+   - Create IAM roles for service accounts
+   - Configure OIDC provider
+   - Setup proper permissions
+
+### WHAT REMAINS DEFAULT:
+1. **Grafana Version**: 12.2.1 (latest stable)
+2. **Chart Version**: 10.1.4 (latest)
+3. **Basic Authentication**: observe/password
+4. **Log Level**: info
+5. **Feature Toggles**: Standard alerting features
+6. **Plugin List**: pyroscope-datasource, pyroscope-panel
+7. **Dashboard Providers**: Standard folder structure
+8. **Sidecar Configuration**: Auto-discovery enabled
+9. **Service Monitor**: Prometheus scraping enabled
+10. **Security Context**: Standard non-root user (472)
+
+## DEPLOYMENT COMMAND:
+```bash
+helm upgrade --install grafana grafana/grafana \
+  -f example-eks-prod.yaml \
+  -n monitoring --create-namespace
+```
+
+## VERIFICATION STEPS:
+1. Check pod status: kubectl get pods -n monitoring
+2. Verify ingress: kubectl get ingress -n monitoring
+3. Test URL: https://grafana.spicybiryaniwala.shop
+4. Check datasources: Login → Configuration → Data Sources
+5. Verify dashboards: Check dashboard folders
+
+## TROUBLESHOOTING:
+- If pods fail: Check node selectors and tolerations
+- If ingress fails: Verify DNS and certificates
+- If datasources fail: Check authentication and URLs
+- If database fails: Verify connection and credentials

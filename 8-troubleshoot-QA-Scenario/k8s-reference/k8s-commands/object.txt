@@ -1,0 +1,36 @@
+Kubernetes Objects with Their Kind and API Version
+ObjectName	 Kind	      API Version
+Pod	        Pod	                v1
+ReplicaSet	ReplicaSet	apps/v1
+Deployment	Deployment	apps/v1
+DaemonSet	DaemonSet	apps/v1
+StatefulSet	StatefulSet	apps/v1
+Job	             Job	batch/v1
+CronJob	         CronJob	batch/v1
+Service	          Service	v1
+PersistentVolume (PV)	PersistentVolume	v1
+PersistentVolumeClaim (PVC)	PersistentVolumeClaim	v1
+StorageClass	StorageClass	storage.k8s.io/v1
+Dynamic Provisioning	StorageClass	storage.k8s.io/v1
+Ingress	Ingress	networking.k8s.io/v1
+Nginx Ingress Controller	Deployment	apps/v1
+IngressClass	IngressClass	networking.k8s.io/v1
+NetworkPolicy	NetworkPolicy	networking.k8s.io/v1
+Namespace	Namespace	v1
+Role	Role	rbac.authorization.k8s.io/v1
+ClusterRole	ClusterRole	rbac.authorization.k8s.io/v1
+RoleBinding	RoleBinding	rbac.authorization.k8s.io/v1
+ClusterRoleBinding	ClusterRoleBinding	rbac.authorization.k8s.io/v1
+PodDisruptionBudget (PDB)	PodDisruptionBudget	policy/v1
+PodSecurityPolicy (Deprecated)	PodSecurityPolicy	policy/v1beta1 (deprecated)
+ServiceAccount	ServiceAccount	v1
+ConfigMap	ConfigMap	v1
+Secret	Secret	v1
+LimitRange	LimitRange	v1
+ResourceQuota	ResourceQuota	v1
+HorizontalPodAutoscaler	HorizontalPodAutoscaler	autoscaling/v2
+Endpoint	Endpoints	v1
+Event	Event	v1
+Node	Node	v1
+PodLifecycle	Pod Lifecycle Phases (Pending, Running, Succeeded, Failed, Unknown)	Conceptual
+

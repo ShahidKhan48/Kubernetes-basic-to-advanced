@@ -1,0 +1,420 @@
+KUBERNETES PRACTICAL EXAMPLES & USE CASES
+
+=== LABELS & SELECTORS EXAMPLES ===
+
+Labels Example:
+metadata:
+  labels:
+    app: frontend
+    version: v1.2.3
+    environment: production
+    tier: web
+
+Selector Examples:
+- Equality: app=frontend, version!=v1.0.0
+- Set-based: environment in (prod,staging), tier notin (cache)
+- kubectl get pods -l app=frontend,environment=production
+
+=== ANNOTATIONS EXAMPLES ===
+
+Common Annotations:
+metadata:
+  annotations:
+    kubernetes.io/created-by: "deployment-controller"
+    deployment.kubernetes.io/revision: "3"
+    ingress.kubernetes.io/ssl-redirect: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+
+=== HEALTH PROBES EXAMPLES ===
+
+Liveness Probe (HTTP):
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+Readiness Probe (TCP):
+readinessProbe:
+  tcpSocket:
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+Startup Probe (Exec):
+startupProbe:
+  exec:
+    command:
+    - cat
+    - /tmp/healthy
+  failureThreshold: 30
+  periodSeconds: 10
+
+=== RESOURCE MANAGEMENT EXAMPLES ===
+
+Resource Requests & Limits:
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "200m"
+
+QoS Classes:
+- Guaranteed: requests = limits for all containers
+- Burstable: requests < limits or only requests specified
+- BestEffort: no requests or limits specified
+
+=== AFFINITY & ANTI-AFFINITY EXAMPLES ===
+
+Node Affinity (Preferred):
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      preference:
+        matchExpressions:
+        - key: disktype
+          operator: In
+          values:
+          - ssd
+
+Pod Anti-Affinity (Required):
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - frontend
+      topologyKey: kubernetes.io/hostname
+
+=== TAINTS & TOLERATIONS EXAMPLES ===
+
+Taint Node:
+kubectl taint nodes node1 key1=value1:NoSchedule
+
+Toleration in Pod:
+tolerations:
+- key: "key1"
+  operator: "Equal"
+  value: "value1"
+  effect: "NoSchedule"
+
+Special Tolerations:
+- key: "node.kubernetes.io/not-ready"
+  operator: "Exists"
+  effect: "NoExecute"
+  tolerationSeconds: 300
+
+=== STORAGE EXAMPLES ===
+
+PVC with StorageClass:
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 10Gi
+
+Volume Mount in Pod:
+volumeMounts:
+- name: data-volume
+  mountPath: /data
+volumes:
+- name: data-volume
+  persistentVolumeClaim:
+    claimName: my-pvc
+
+=== NETWORKING EXAMPLES ===
+
+Service with Multiple Ports:
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    app: my-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  - name: https
+    port: 443
+    targetPort: 8443
+  type: LoadBalancer
+
+Ingress with Path-based Routing:
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+spec:
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+      - path: /web
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80
+
+=== SECURITY EXAMPLES ===
+
+Security Context (Pod Level):
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 3000
+  fsGroup: 2000
+  runAsNonRoot: true
+
+Security Context (Container Level):
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+    add:
+    - NET_BIND_SERVICE
+
+Secret as Environment Variable:
+env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: db-secret
+      key: password
+
+ConfigMap as Volume:
+volumeMounts:
+- name: config-volume
+  mountPath: /etc/config
+volumes:
+- name: config-volume
+  configMap:
+    name: my-config
+
+=== RBAC EXAMPLES ===
+
+Role for Pod Management:
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-manager
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+RoleBinding:
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-manager-binding
+subjects:
+- kind: User
+  name: jane
+  apiGroup: rbac.authorization.k8s.io
+- kind: ServiceAccount
+  name: pod-manager-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: pod-manager
+  apiGroup: rbac.authorization.k8s.io
+
+=== AUTOSCALING EXAMPLES ===
+
+HPA with Multiple Metrics:
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+=== ADVANCED SCHEDULING EXAMPLES ===
+
+Topology Spread Constraints:
+topologySpreadConstraints:
+- maxSkew: 1
+  topologyKey: zone
+  whenUnsatisfiable: DoNotSchedule
+  labelSelector:
+    matchLabels:
+      app: my-app
+
+Node Selector:
+nodeSelector:
+  disktype: ssd
+  kubernetes.io/arch: amd64
+
+=== LIFECYCLE HOOKS EXAMPLES ===
+
+PreStop Hook:
+lifecycle:
+  preStop:
+    exec:
+      command:
+      - /bin/sh
+      - -c
+      - "sleep 15"
+
+PostStart Hook:
+lifecycle:
+  postStart:
+    httpGet:
+      path: /warmup
+      port: 8080
+
+=== INIT CONTAINER EXAMPLES ===
+
+Init Container for DB Migration:
+initContainers:
+- name: db-migration
+  image: migrate/migrate
+  command: ['migrate', '-path', '/migrations', '-database', 'postgres://...', 'up']
+  volumeMounts:
+  - name: migrations
+    mountPath: /migrations
+
+=== TROUBLESHOOTING EXAMPLES ===
+
+Debug Pod:
+kubectl run debug-pod --image=busybox --rm -it --restart=Never -- sh
+
+Port Forward:
+kubectl port-forward pod/my-pod 8080:80
+kubectl port-forward service/my-service 8080:80
+
+Exec into Pod:
+kubectl exec -it my-pod -- /bin/bash
+kubectl exec -it my-pod -c my-container -- /bin/sh
+
+Get Pod Logs:
+kubectl logs my-pod
+kubectl logs my-pod -c my-container
+kubectl logs -f my-pod --tail=100
+
+=== COMMON PATTERNS ===
+
+Sidecar Pattern (Logging):
+containers:
+- name: app
+  image: my-app:latest
+- name: log-shipper
+  image: fluentd:latest
+  volumeMounts:
+  - name: logs
+    mountPath: /var/log
+
+Ambassador Pattern (Proxy):
+containers:
+- name: app
+  image: my-app:latest
+- name: ambassador
+  image: nginx:latest
+  ports:
+  - containerPort: 80
+
+Adapter Pattern (Monitoring):
+containers:
+- name: app
+  image: my-app:latest
+- name: monitoring-adapter
+  image: prometheus-adapter:latest
+  ports:
+  - containerPort: 9090
+
+=== RESOURCE QUOTAS EXAMPLES ===
+
+Namespace Resource Quota:
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "10"
+    persistentvolumeclaims: "4"
+    services: "5"
+    secrets: "10"
+    configmaps: "10"
+
+=== NETWORK POLICY EXAMPLES ===
+
+Deny All Ingress:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+Allow Specific Ingress:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+
+These examples show real-world usage patterns for all major Kubernetes concepts!

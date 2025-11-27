@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: my-cronjob
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: my-cron-container
+            image: busybox
+            command: ["sh", "-c", "echo Hello from CronJob"]
+          restartPolicy: OnFailure

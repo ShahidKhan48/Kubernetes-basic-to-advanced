@@ -1,0 +1,366 @@
+# Custom Scheduler Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: custom-scheduler
+  namespace: kube-system
+  labels:
+    app: custom-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: custom-scheduler
+  template:
+    metadata:
+      labels:
+        app: custom-scheduler
+    spec:
+      serviceAccountName: custom-scheduler
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.28.0
+        command:
+        - kube-scheduler
+        - --config=/etc/kubernetes/scheduler-config.yaml
+        - --v=2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: custom-scheduler-config
+
+---
+# Custom Scheduler ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: custom-scheduler
+  namespace: kube-system
+
+---
+# Custom Scheduler ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: custom-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: custom-scheduler
+  namespace: kube-system
+
+---
+# Custom Scheduler Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-scheduler-config
+  namespace: kube-system
+data:
+  scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    kind: KubeSchedulerConfiguration
+    profiles:
+    - schedulerName: custom-scheduler
+      plugins:
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+          - name: PodTopologySpread
+          disabled:
+          - name: NodeResourcesBalancedAllocation
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+          - name: PodTopologySpread
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: LeastAllocated
+    leaderElection:
+      leaderElect: true
+      resourceName: custom-scheduler
+      resourceNamespace: kube-system
+
+---
+# GPU-Optimized Scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-scheduler
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-scheduler
+  template:
+    metadata:
+      labels:
+        app: gpu-scheduler
+    spec:
+      serviceAccountName: gpu-scheduler
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.28.0
+        command:
+        - kube-scheduler
+        - --config=/etc/kubernetes/gpu-scheduler-config.yaml
+        - --v=2
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: gpu-scheduler-config
+
+---
+# GPU Scheduler ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gpu-scheduler
+  namespace: kube-system
+
+---
+# GPU Scheduler ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gpu-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: gpu-scheduler
+  namespace: kube-system
+
+---
+# GPU Scheduler Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-scheduler-config
+  namespace: kube-system
+data:
+  gpu-scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    kind: KubeSchedulerConfiguration
+    profiles:
+    - schedulerName: gpu-scheduler
+      plugins:
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated
+            resources:
+            - name: nvidia.com/gpu
+              weight: 100
+    leaderElection:
+      leaderElect: true
+      resourceName: gpu-scheduler
+      resourceNamespace: kube-system
+
+---
+# Pod using Custom Scheduler
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-scheduled-pod
+  namespace: default
+spec:
+  schedulerName: custom-scheduler
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+---
+# Deployment using GPU Scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-workload
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gpu-workload
+  template:
+    metadata:
+      labels:
+        app: gpu-workload
+    spec:
+      schedulerName: gpu-scheduler
+      containers:
+      - name: gpu-app
+        image: tensorflow/tensorflow:latest-gpu
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            nvidia.com/gpu: 1
+            memory: "4Gi"
+            cpu: "2000m"
+
+---
+# Batch Scheduler for Low Priority Jobs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-scheduler
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batch-scheduler
+  template:
+    metadata:
+      labels:
+        app: batch-scheduler
+    spec:
+      serviceAccountName: batch-scheduler
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.28.0
+        command:
+        - kube-scheduler
+        - --config=/etc/kubernetes/batch-scheduler-config.yaml
+        - --v=2
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: batch-scheduler-config
+
+---
+# Batch Scheduler ServiceAccount and RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: batch-scheduler
+  namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: batch-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: batch-scheduler
+  namespace: kube-system
+
+---
+# Batch Scheduler Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batch-scheduler-config
+  namespace: kube-system
+data:
+  batch-scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    kind: KubeSchedulerConfiguration
+    profiles:
+    - schedulerName: batch-scheduler
+      plugins:
+        queueSort:
+          enabled:
+          - name: PrioritySort
+        filter:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+        score:
+          enabled:
+          - name: NodeResourcesFit
+          - name: NodeAffinity
+      pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: LeastAllocated
+    leaderElection:
+      leaderElect: true
+      resourceName: batch-scheduler
+      resourceNamespace: kube-system
+
+---
+# Job using Batch Scheduler
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processing-job
+  namespace: default
+spec:
+  completions: 5
+  parallelism: 2
+  template:
+    metadata:
+      labels:
+        app: batch-job
+    spec:
+      schedulerName: batch-scheduler
+      restartPolicy: Never
+      containers:
+      - name: batch-processor
+        image: busybox:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Processing batch job with custom scheduler..."
+          sleep 60
+          echo "Batch job completed"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"

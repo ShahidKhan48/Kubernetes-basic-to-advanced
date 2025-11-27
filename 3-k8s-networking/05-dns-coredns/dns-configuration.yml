@@ -1,0 +1,129 @@
+# DNS Configuration Examples
+
+---
+# Pod with Custom DNS Configuration
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-dns-pod
+spec:
+  containers:
+  - name: app
+    image: nginx
+  dnsPolicy: "None"
+  dnsConfig:
+    nameservers:
+    - 8.8.8.8
+    - 8.8.4.4
+    searches:
+    - custom.local
+    - company.internal
+    options:
+    - name: ndots
+      value: "2"
+    - name: edns0
+
+---
+# Pod with ClusterFirst DNS Policy
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cluster-dns-pod
+spec:
+  containers:
+  - name: app
+    image: nginx
+  dnsPolicy: ClusterFirst
+
+---
+# Pod with Host Network DNS
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-network-pod
+spec:
+  hostNetwork: true
+  containers:
+  - name: app
+    image: nginx
+  dnsPolicy: ClusterFirstWithHostNet
+
+---
+# CoreDNS ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# DNS Debug Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-debug
+spec:
+  containers:
+  - name: debug
+    image: busybox
+    command:
+    - sleep
+    - "3600"
+  restartPolicy: Never
+
+---
+# Service for DNS Testing
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-test-service
+spec:
+  selector:
+    app: dns-test
+  ports:
+  - port: 80
+    targetPort: 8080
+
+---
+# Deployment for DNS Testing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-test-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dns-test
+  template:
+    metadata:
+      labels:
+        app: dns-test
+    spec:
+      containers:
+      - name: web
+        image: nginx
+        ports:
+        - containerPort: 80

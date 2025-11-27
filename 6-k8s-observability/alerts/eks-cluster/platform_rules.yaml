@@ -1,0 +1,15 @@
+namespace: business_common
+groups:
+  - name: reseller_app_alerts
+    rules:
+      - alert: "ServiceDown"
+        expr: sum by (container,namespace)(kube_pod_container_status_running{container=~"nc-iam-service|grant|nc-mercury|workflow-service|nc-fintech-lsp-v2|nc-platform-dam|kyc-service|nc-platform-ninjapay|fin-trans|order-management",cluster="prod"}) == 0
+        for: 5m
+        labels:
+          job: "{{ $labels.job }}"
+          severity: critical
+          type: business_alerts
+          team: reseller
+        annotations:
+          summary: "Service down in namespace"
+          description: "Service {{ $labels.container }} in namespace {{ $labels.namespace }} has no running pods for more than 5 minutes."

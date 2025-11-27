@@ -1,0 +1,449 @@
+# Kubernetes Troubleshooting Tools and Scripts
+
+---
+# Debug Pod with Network Tools
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot-debug
+  namespace: default
+spec:
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 3600"]
+    securityContext:
+      capabilities:
+        add: ["NET_ADMIN", "NET_RAW"]
+  restartPolicy: Never
+
+---
+# Debug Pod with System Tools
+apiVersion: v1
+kind: Pod
+metadata:
+  name: system-debug
+  namespace: default
+spec:
+  containers:
+  - name: debug
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 3600"]
+    volumeMounts:
+    - name: host-root
+      mountPath: /host
+      readOnly: true
+  volumes:
+  - name: host-root
+    hostPath:
+      path: /
+  hostNetwork: true
+  hostPID: true
+  restartPolicy: Never
+
+---
+# Privileged Debug Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-debug
+  namespace: default
+spec:
+  containers:
+  - name: debug
+    image: nicolaka/netshoot
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 3600"]
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: host-root
+      mountPath: /host
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+  volumes:
+  - name: host-root
+    hostPath:
+      path: /
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+  hostNetwork: true
+  hostPID: true
+  restartPolicy: Never
+
+---
+# Performance Testing Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: performance-test
+  namespace: default
+spec:
+  containers:
+  - name: stress
+    image: progrium/stress
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 3600"]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 2
+        memory: 2Gi
+  restartPolicy: Never
+
+---
+# Database Debug Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-debug
+  namespace: default
+spec:
+  containers:
+  - name: mysql-client
+    image: mysql:8.0
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 3600"]
+    env:
+    - name: MYSQL_ALLOW_EMPTY_PASSWORD
+      value: "yes"
+  - name: postgres-client
+    image: postgres:15
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 3600"]
+    env:
+    - name: POSTGRES_HOST_AUTH_METHOD
+      value: trust
+  - name: redis-client
+    image: redis:7
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 3600"]
+  restartPolicy: Never
+
+---
+# Log Collection Debug Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-debug
+  namespace: default
+spec:
+  containers:
+  - name: log-viewer
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 3600"]
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
+      readOnly: true
+    - name: containers
+      mountPath: /var/lib/docker/containers
+      readOnly: true
+  volumes:
+  - name: varlog
+    hostPath:
+      path: /var/log
+  - name: containers
+    hostPath:
+      path: /var/lib/docker/containers
+  restartPolicy: Never
+
+---
+# Storage Debug Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: storage-debug
+  namespace: default
+spec:
+  containers:
+  - name: storage-test
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 3600"]
+    volumeMounts:
+    - name: test-volume
+      mountPath: /data
+  volumes:
+  - name: test-volume
+    emptyDir: {}
+  restartPolicy: Never
+
+---
+# Cluster Info Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cluster-info
+  namespace: default
+spec:
+  template:
+    spec:
+      serviceAccountName: cluster-info-sa
+      containers:
+      - name: cluster-info
+        image: bitnami/kubectl
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          echo "=== Cluster Information ==="
+          kubectl version --short
+          echo ""
+          echo "=== Nodes ==="
+          kubectl get nodes -o wide
+          echo ""
+          echo "=== Namespaces ==="
+          kubectl get namespaces
+          echo ""
+          echo "=== Pods by Namespace ==="
+          kubectl get pods --all-namespaces | grep -v Running | head -20
+          echo ""
+          echo "=== Recent Events ==="
+          kubectl get events --sort-by=.metadata.creationTimestamp | tail -10
+          echo ""
+          echo "=== Resource Usage ==="
+          kubectl top nodes 2>/dev/null || echo "Metrics server not available"
+      restartPolicy: Never
+
+---
+# Service Account for Cluster Info Job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-info-sa
+  namespace: default
+
+---
+# ClusterRole for Cluster Info
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-info-reader
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "pods", "services", "namespaces", "events"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding for Cluster Info
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-info-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-info-reader
+subjects:
+- kind: ServiceAccount
+  name: cluster-info-sa
+  namespace: default
+
+---
+# Network Connectivity Test Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: network-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: network-test
+        image: nicolaka/netshoot
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          echo "=== Network Connectivity Test ==="
+          echo "Testing DNS resolution..."
+          nslookup kubernetes.default.svc.cluster.local
+          echo ""
+          echo "Testing external connectivity..."
+          ping -c 3 8.8.8.8
+          echo ""
+          echo "Testing internal service connectivity..."
+          wget -qO- --timeout=5 http://kubernetes.default.svc.cluster.local/api/v1 || echo "API server not reachable"
+          echo ""
+          echo "Network interfaces:"
+          ip addr show
+          echo ""
+          echo "Routing table:"
+          ip route show
+      restartPolicy: Never
+
+---
+# Resource Monitor DaemonSet
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: resource-monitor
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: resource-monitor
+  template:
+    metadata:
+      labels:
+        app: resource-monitor
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: monitor
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          while true; do
+            echo "=== $(date) ==="
+            echo "CPU Usage:"
+            cat /proc/loadavg
+            echo "Memory Usage:"
+            free -h
+            echo "Disk Usage:"
+            df -h | grep -E '^/dev/'
+            echo "Network Stats:"
+            cat /proc/net/dev | head -3
+            echo "===================="
+            sleep 300
+          done
+        volumeMounts:
+        - name: proc
+          mountPath: /proc
+          readOnly: true
+        - name: sys
+          mountPath: /sys
+          readOnly: true
+      volumes:
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: sys
+        hostPath:
+          path: /sys
+      tolerations:
+      - operator: Exists
+
+---
+# Pod Restart Monitor
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pod-restart-monitor
+  namespace: default
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cluster-info-sa
+          containers:
+          - name: restart-monitor
+            image: bitnami/kubectl
+            command: ["/bin/bash"]
+            args:
+            - -c
+            - |
+              echo "=== Pod Restart Monitor $(date) ==="
+              kubectl get pods --all-namespaces -o json | \
+              jq -r '.items[] | select(.status.containerStatuses[]?.restartCount > 0) | 
+              "\(.metadata.namespace)/\(.metadata.name): \(.status.containerStatuses[0].restartCount) restarts"' | \
+              sort -k2 -nr | head -10
+              echo ""
+              echo "Recent pod events:"
+              kubectl get events --all-namespaces --field-selector type=Warning | head -5
+          restartPolicy: OnFailure
+
+---
+# Disk Cleanup Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: disk-cleanup
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      containers:
+      - name: cleanup
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          echo "=== Disk Cleanup Started ==="
+          echo "Before cleanup:"
+          df -h
+          echo ""
+          echo "Cleaning up temporary files..."
+          find /host/tmp -type f -atime +7 -delete 2>/dev/null || true
+          echo "Cleaning up log files..."
+          find /host/var/log -name "*.log" -size +100M -mtime +7 -delete 2>/dev/null || true
+          echo ""
+          echo "After cleanup:"
+          df -h
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+        securityContext:
+          privileged: true
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+      restartPolicy: Never
+
+---
+# Emergency Access Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emergency-access
+  namespace: kube-system
+spec:
+  containers:
+  - name: emergency
+    image: nicolaka/netshoot
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 86400"]
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: host-root
+      mountPath: /host
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+    - name: kubeconfig
+      mountPath: /root/.kube
+  volumes:
+  - name: host-root
+    hostPath:
+      path: /
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+  - name: kubeconfig
+    hostPath:
+      path: /etc/kubernetes/admin.conf
+  hostNetwork: true
+  hostPID: true
+  restartPolicy: Never

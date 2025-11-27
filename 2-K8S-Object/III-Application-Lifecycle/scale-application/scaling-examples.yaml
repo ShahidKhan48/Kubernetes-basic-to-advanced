@@ -1,0 +1,186 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalable-web-app
+  labels:
+    app: scalable-demo
+spec:
+  replicas: 3  # Initial replica count
+  selector:
+    matchLabels:
+      app: scalable-demo
+  template:
+    metadata:
+      labels:
+        app: scalable-demo
+    spec:
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Health checks for scaling decisions
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: scalable-web-app-hpa
+  labels:
+    app: scalable-demo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: scalable-web-app
+  minReplicas: 2
+  maxReplicas: 20
+  
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  
+  # Custom metric: HTTP requests per second
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  
+  # Scaling behavior configuration
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+      - type: Percent
+        value: 10    # Scale down by max 10%
+        periodSeconds: 60
+      - type: Pods
+        value: 2     # Or scale down by max 2 pods
+        periodSeconds: 60
+      selectPolicy: Min  # Use more conservative policy
+    
+    scaleUp:
+      stabilizationWindowSeconds: 60   # 1 minute
+      policies:
+      - type: Percent
+        value: 50    # Scale up by max 50%
+        periodSeconds: 60
+      - type: Pods
+        value: 4     # Or scale up by max 4 pods
+        periodSeconds: 60
+      selectPolicy: Max  # Use more aggressive policy
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: scalable-web-app-vpa
+  labels:
+    app: scalable-demo
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: scalable-web-app
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: web-app
+      maxAllowed:
+        cpu: 2
+        memory: 4Gi
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      controlledResources: ["cpu", "memory"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scalable-web-app-service
+  labels:
+    app: scalable-demo
+spec:
+  selector:
+    app: scalable-demo
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: LoadBalancer
+---
+# Example: Batch job with scaling
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processing-job
+  labels:
+    app: batch-processor
+spec:
+  parallelism: 5      # Run 5 pods in parallel
+  completions: 20     # Complete 20 tasks total
+  backoffLimit: 3     # Retry failed pods 3 times
+  
+  template:
+    metadata:
+      labels:
+        app: batch-processor
+    spec:
+      containers:
+      - name: processor
+        image: spicybiryaniwala.shop/batch-processor:v1.0.0
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        env:
+        - name: BATCH_SIZE
+          value: "100"
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+      
+      restartPolicy: OnFailure

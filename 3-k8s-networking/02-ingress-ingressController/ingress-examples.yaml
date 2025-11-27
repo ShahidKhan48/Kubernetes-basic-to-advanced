@@ -1,0 +1,287 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: basic-ingress
+  labels:
+    app: web-app
+spec:
+  rules:
+  - host: spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-app-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-ingress
+  labels:
+    app: web-app
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - spicybiryaniwala.shop
+    - www.spicybiryaniwala.shop
+    secretName: spicybiryaniwala-tls
+  rules:
+  - host: spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-app-service
+            port:
+              number: 80
+  - host: www.spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-app-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: advanced-ingress
+  labels:
+    app: multi-service
+  annotations:
+    # NGINX specific annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://spicybiryaniwala.shop"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+spec:
+  tls:
+  - hosts:
+    - api.spicybiryaniwala.shop
+    secretName: api-tls-secret
+  rules:
+  - host: api.spicybiryaniwala.shop
+    http:
+      paths:
+      # API v1 routes
+      - path: /api/v1(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: api-v1-service
+            port:
+              number: 80
+      
+      # API v2 routes
+      - path: /api/v2(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: api-v2-service
+            port:
+              number: 80
+      
+      # Admin routes
+      - path: /admin(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+      
+      # Static files
+      - path: /static(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: static-service
+            port:
+              number: 80
+---
+# Multi-host ingress with different backends
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-host-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - spicybiryaniwala.shop
+    - admin.spicybiryaniwala.shop
+    - api.spicybiryaniwala.shop
+    secretName: multi-host-tls
+  rules:
+  # Main website
+  - host: spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+  
+  # Admin panel
+  - host: admin.spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+  
+  # API endpoints
+  - host: api.spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+---
+# Ingress with authentication
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Spicy Biryani Wala Admin'
+spec:
+  tls:
+  - hosts:
+    - secure.spicybiryaniwala.shop
+    secretName: secure-tls
+  rules:
+  - host: secure.spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: secure-service
+            port:
+              number: 80
+---
+# Canary deployment ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "10"  # 10% traffic to canary
+spec:
+  rules:
+  - host: spicybiryaniwala.shop
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-app-canary-service
+            port:
+              number: 80
+---
+# TLS Secret for certificates
+apiVersion: v1
+kind: Secret
+metadata:
+  name: spicybiryaniwala-tls
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...  # Base64 encoded certificate
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t...  # Base64 encoded private key
+---
+# Basic auth secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth
+type: Opaque
+data:
+  auth: YWRtaW46JGFwcjEkSDY1dnVhNzAkLnRiTXhPbEZsYWdELkVTaVJtOUVuMQ==  # admin:admin123
+---
+# Example services for ingress backends
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-service
+spec:
+  selector:
+    app: web-app
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-v1-service
+spec:
+  selector:
+    app: api
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-v2-service
+spec:
+  selector:
+    app: api
+    version: v2
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+spec:
+  selector:
+    app: admin
+  ports:
+  - port: 80
+    targetPort: 8080

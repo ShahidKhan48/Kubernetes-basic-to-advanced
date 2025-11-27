@@ -1,0 +1,1 @@
+mimirtool rules load --address=https://mimir.ninjacart.in --id="_local" --key="$mimir_password" --user observe $(pwd)/*.yaml $(pwd)/../common/*.yaml

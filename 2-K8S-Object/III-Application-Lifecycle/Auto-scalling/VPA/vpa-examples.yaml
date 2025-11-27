@@ -1,0 +1,71 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: web-app-vpa
+  labels:
+    app: web-app
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-app-deployment
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: web-app
+      maxAllowed:
+        cpu: 2
+        memory: 4Gi
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      controlledResources: ["cpu", "memory"]
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: database-vpa
+  labels:
+    app: database
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: postgres-statefulset
+  updatePolicy:
+    updateMode: "Initial"  # Only set at creation
+  resourcePolicy:
+    containerPolicies:
+    - containerName: postgres
+      maxAllowed:
+        cpu: 4
+        memory: 8Gi
+      minAllowed:
+        cpu: 500m
+        memory: 1Gi
+      controlledResources: ["memory"]  # Only manage memory
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: batch-worker-vpa
+  labels:
+    app: batch-worker
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: batch-worker
+  updatePolicy:
+    updateMode: "Recreate"  # Delete and recreate pods
+  resourcePolicy:
+    containerPolicies:
+    - containerName: worker
+      maxAllowed:
+        cpu: 8
+        memory: 16Gi
+      minAllowed:
+        cpu: 200m
+        memory: 256Mi
+      controlledValues: RequestsAndLimits  # Update both requests and limits

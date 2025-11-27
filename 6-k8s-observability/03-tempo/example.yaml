@@ -1,0 +1,257 @@
+tempo-distributed:
+  compactor:
+    ring:
+        heartbeat_timeout: 5m
+        kvstore:
+            store: memberlist
+    config:
+      compaction:
+        block_retention: 720h0m0s
+        compacted_block_retention: 5m
+        compaction_cycle: 30s
+        compaction_window: 15m0s
+        max_block_bytes: 1000000000
+        max_compaction_objects: 10
+        max_time_per_tenant: 5m0s
+        retention_concurrency: 1
+        v2_in_buffer_bytes: 5242880
+        v2_out_buffer_bytes: 20971520
+        v2_prefetch_traces_count: 1000
+      query_frontend:
+        max_retries: 2
+        search:
+          concurrent_jobs: 1000
+          target_bytes_per_job: 10485760000
+        tolerate_failed_blocks: 0
+        trace_by_id:
+          hedge_requests_at: 2s
+          hedge_requests_up_to: 2
+          query_shards: 50
+      server:
+        grpc_server_max_recv_msg_size: 104857600
+        grpc_server_max_send_msg_size: 104857600
+        http_listen_port: 3100
+        http_server_read_timeout: 90s
+        http_server_write_timeout: 90s
+        log_format: logfmt
+        log_level: info
+    replicas: 1  
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    extraVolumeMounts: {}
+    extraVolumes: {}
+    resources:
+      limits:
+        memory: 58Gi
+      requests:
+        memory: 15Gi
+
+  distributor:
+    ring:
+        kvstore:
+            store: memberlist
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 60
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    extraVolumeMounts: {}
+    extraVolumes: {}
+    config:
+      log_received_spans:
+        enabled: true
+    replicas: 3
+    resources:
+      requests:
+        memory: 1Gi
+
+  gateway:
+    enabled: true
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 60
+  global:
+    clusterDomain: cluster.local
+  global_overrides:
+    ingestion_burst_size_bytes: 19000000000
+    ingestion_rate_limit_bytes: 19000000000
+    max_bytes_per_trace: 19000000000
+    max_traces_per_user: 1000000000
+    metrics_generator_processors:
+      - service-graphs
+      - span-metrics
+      - local-blocks
+
+  ingester:
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 60
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    extraVolumeMounts: {}
+    extraVolumes: {}
+    replicas: 3
+    resources:
+      limits:
+        memory: 18Gi
+      requests:
+        memory: 5Gi
+    lifecycler:
+        join_after: 30s
+        ring:
+            replication_factor: 3
+            heartbeat_timeout: 1m
+            kvstore:
+                store: memberlist
+        tokens_file_path: /var/tempo/tokens.json
+  metaMonitoring:
+    grafanaAgent:
+      enabled: false
+      installOperator: false
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: monitor
+  minio:
+    enabled: false
+  multitenancyEnabled: true
+  queryFrontend:
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 60
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    extraVolumeMounts: {}
+    extraVolumes: {}
+    replicas: 3
+  querier:
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 60
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv: 
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    extraVolumeMounts: {}
+    extraVolumes: {}
+    replicas: 3
+
+  storage:
+    trace:
+      s3:
+        bucket_name: ninjacart-tempo-9acmnsc9ryu1sndmbkj4mpt5xhwygaps3a-s3alias
+      backend: s3
+    admin:
+      backend: s3
+  traces:
+    otlp:
+      grpc:
+        enabled: true
+      http:
+        enabled: true
+
+  metricsGenerator:
+    enabled: true
+    extraArgs:
+    - -config.expand-env=true
+    extraEnv:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    extraVolumeMounts: {}
+    extraVolumes: {}
+    config:
+      local_blocks:
+        filter_server_spans: false
+        flush_to_storage: true
+      registry:
+        collection_interval: 15s
+        external_labels: {}
+        stale_duration: 15m
+      storage:
+        path: /var/tempo/wal
+        remote_write:
+        - headers:
+          remote_timeout: 30s
+          url: http://mimir-distributed-nginx.observe.svc.cluster.local/api/v1/push
+          send_exemplars: true
+          basic_auth:
+            username: observe
+            password: c6Sd3W7pgIsBc08!
+        remote_write_flush_deadline: 1m
+      traces_storage:
+        path: /var/tempo/traces
+      processor:
+        span_metrics:
+            dimensions:
+              - http.method
+              - http.target
+              - http.status_code
+              - service.version
+        service_graphs:
+            dimensions:
+              - http.method
+              - http.target
+              - http.status_code
+              - service.version
+
+  serviceAccount:
+    annotations: 
+      eks.amazonaws.com/role-arn: arn:aws:iam::061039808372:role/tempo-distributed-role
+    automountServiceAccountToken: true
+    create: true
+    imagePullSecrets: []
+    labels: {}
+    name: null
+
+  memberlist:
+      abort_if_cluster_join_fails: false
+      randomize_node_name: false
+      leave_timeout: 10s
+      pull_push_interval: 10s
+      rejoin_interval: 15m
+      cluster_label: tempo-gossip-ring.observe.svc.cluster.local
+      bind_addr:
+      - ${MY_POD_IP}
+      bind_port: 7946
+      join_members:
+      - dns+tempo-gossip-ring:7946

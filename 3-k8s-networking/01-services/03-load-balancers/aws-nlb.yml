@@ -1,0 +1,100 @@
+# AWS Network Load Balancer Examples
+
+---
+# Basic NLB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nlb-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: web-app
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+
+---
+# NLB with Cross-Zone Load Balancing
+apiVersion: v1
+kind: Service
+metadata:
+  name: nlb-cross-zone
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+spec:
+  type: LoadBalancer
+  selector:
+    app: high-performance-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  externalTrafficPolicy: Local
+
+---
+# Internal NLB
+apiVersion: v1
+kind: Service
+metadata:
+  name: internal-nlb
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-12345,subnet-67890"
+spec:
+  type: LoadBalancer
+  selector:
+    app: internal-app
+  ports:
+  - port: 8080
+    targetPort: 8080
+
+---
+# NLB with SSL Termination
+apiVersion: v1
+kind: Service
+metadata:
+  name: nlb-ssl
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "https"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+spec:
+  type: LoadBalancer
+  selector:
+    app: secure-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  - name: https
+    port: 443
+    targetPort: 8080
+
+---
+# NLB with Health Checks
+apiVersion: v1
+kind: Service
+metadata:
+  name: nlb-health-check
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "HTTP"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/health"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "30"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "3"
+spec:
+  type: LoadBalancer
+  selector:
+    app: monitored-app
+  ports:
+  - port: 80
+    targetPort: 8080

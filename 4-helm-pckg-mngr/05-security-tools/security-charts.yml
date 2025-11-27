@@ -1,0 +1,547 @@
+# Security Tools Helm Charts
+
+---
+# Vault Helm Chart Configuration
+apiVersion: v2
+name: vault-deployment
+description: HashiCorp Vault deployment with HA and auto-unseal
+version: 1.0.0
+
+# Vault Values
+vault:
+  global:
+    enabled: true
+    tlsDisable: false
+  
+  server:
+    ha:
+      enabled: true
+      replicas: 3
+      raft:
+        enabled: true
+        setNodeId: true
+        config: |
+          ui = true
+          listener "tcp" {
+            tls_disable = 0
+            address = "[::]:8200"
+            cluster_address = "[::]:8201"
+            tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+            tls_key_file = "/vault/userconfig/vault-tls/tls.key"
+          }
+          storage "raft" {
+            path = "/vault/data"
+            retry_join {
+              leader_api_addr = "https://vault-0.vault-internal:8200"
+            }
+            retry_join {
+              leader_api_addr = "https://vault-1.vault-internal:8200"
+            }
+            retry_join {
+              leader_api_addr = "https://vault-2.vault-internal:8200"
+            }
+          }
+          seal "awskms" {
+            region = "us-east-1"
+            kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+          }
+          service_registration "kubernetes" {}
+    
+    volumes:
+      - name: vault-tls
+        secret:
+          secretName: vault-tls
+    
+    volumeMounts:
+      - mountPath: /vault/userconfig/vault-tls
+        name: vault-tls
+        readOnly: true
+    
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+    
+    serviceAccount:
+      annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/vault-kms-role
+  
+  ui:
+    enabled: true
+    serviceType: ClusterIP
+  
+  injector:
+    enabled: true
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+---
+# Trivy Operator Configuration
+apiVersion: v2
+name: trivy-operator
+description: Trivy Operator for vulnerability scanning
+version: 1.0.0
+
+# Trivy Operator Values
+trivyOperator:
+  image:
+    repository: aquasec/trivy-operator
+    tag: 0.16.4
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  config:
+    vulnerabilityReportsScanner: Trivy
+    configAuditScanner: Trivy
+    scanJobTimeout: 5m
+    scanJobsConcurrentLimit: 10
+    scanJobsRetryDelay: 30s
+    metricsBindAddress: :8080
+    healthProbeBindAddress: :9090
+    
+  trivy:
+    ignoreUnfixed: true
+    severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+      limits:
+        cpu: 500m
+        memory: 500Mi
+  
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+---
+# Falco Security Monitoring
+apiVersion: v2
+name: falco-security
+description: Falco runtime security monitoring
+version: 1.0.0
+
+# Falco Values
+falco:
+  image:
+    repository: falcosecurity/falco
+    tag: 0.35.1
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+  
+  falco:
+    rules_file:
+      - /etc/falco/falco_rules.yaml
+      - /etc/falco/falco_rules.local.yaml
+      - /etc/falco/k8s_audit_rules.yaml
+      - /etc/falco/rules.d
+    
+    time_format_iso_8601: false
+    json_output: true
+    json_include_output_property: true
+    log_stderr: true
+    log_syslog: true
+    log_level: info
+    priority: debug
+    
+    outputs:
+      rate: 1
+      max_burst: 1000
+    
+    syslog_output:
+      enabled: true
+    
+    file_output:
+      enabled: false
+    
+    stdout_output:
+      enabled: true
+    
+    webserver:
+      enabled: true
+      listen_port: 8765
+      k8s_healthz_endpoint: /healthz
+      ssl_enabled: false
+    
+    grpc:
+      enabled: false
+      bind_address: "0.0.0.0:5060"
+      threadiness: 0
+    
+    grpc_output:
+      enabled: false
+  
+  customRules:
+    rules-custom.yaml: |-
+      - rule: Detect Privilege Escalation
+        desc: Detect attempts to escalate privileges
+        condition: >
+          spawned_process and proc.name in (sudo, su) and
+          not user.name in (root)
+        output: >
+          Privilege escalation attempt (user=%user.name command=%proc.cmdline)
+        priority: WARNING
+        tags: [privilege_escalation]
+      
+      - rule: Sensitive File Access
+        desc: Detect access to sensitive files
+        condition: >
+          open_read and fd.name in (/etc/passwd, /etc/shadow, /etc/sudoers)
+        output: >
+          Sensitive file accessed (file=%fd.name user=%user.name command=%proc.cmdline)
+        priority: WARNING
+        tags: [file_access]
+  
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+---
+# OPA Gatekeeper Configuration
+apiVersion: v2
+name: opa-gatekeeper
+description: OPA Gatekeeper policy enforcement
+version: 1.0.0
+
+# Gatekeeper Values
+gatekeeper:
+  image:
+    repository: openpolicyagent/gatekeeper
+    tag: v3.14.0
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  
+  audit:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+  
+  constraintViolationsLimit: 20
+  auditInterval: 60
+  auditMatchKindOnly: false
+  auditFromCache: false
+  
+  webhook:
+    failurePolicy: Fail
+    namespaceSelector:
+      matchExpressions:
+      - key: admission.gatekeeper.sh/ignore
+        operator: DoesNotExist
+
+---
+# External Secrets Operator
+apiVersion: v2
+name: external-secrets
+description: External Secrets Operator for secret management
+version: 1.0.0
+
+# External Secrets Values
+externalSecrets:
+  image:
+    repository: ghcr.io/external-secrets/external-secrets
+    tag: v0.9.9
+  
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  
+  webhook:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  
+  certController:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+---
+# Cert-Manager Configuration
+apiVersion: v2
+name: cert-manager
+description: Cert-Manager for TLS certificate management
+version: 1.0.0
+
+# Cert-Manager Values
+certManager:
+  image:
+    repository: quay.io/jetstack/cert-manager-controller
+    tag: v1.13.2
+  
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  
+  webhook:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  
+  cainjector:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  
+  prometheus:
+    enabled: true
+    servicemonitor:
+      enabled: true
+      interval: 30s
+
+---
+# Kyverno Policy Engine
+apiVersion: v2
+name: kyverno
+description: Kyverno policy engine for Kubernetes
+version: 1.0.0
+
+# Kyverno Values
+kyverno:
+  image:
+    repository: ghcr.io/kyverno/kyverno
+    tag: v1.10.5
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  
+  config:
+    webhooks:
+      - namespaceSelector:
+          matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: NotIn
+            values:
+            - kube-system
+            - kyverno
+  
+  policies:
+    - name: require-pod-security-standards
+      spec:
+        validationFailureAction: enforce
+        background: true
+        rules:
+        - name: check-security-context
+          match:
+            any:
+            - resources:
+                kinds:
+                - Pod
+          validate:
+            message: "Pod must run as non-root user"
+            pattern:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+    
+    - name: disallow-privileged-containers
+      spec:
+        validationFailureAction: enforce
+        background: true
+        rules:
+        - name: check-privileged
+          match:
+            any:
+            - resources:
+                kinds:
+                - Pod
+          validate:
+            message: "Privileged containers are not allowed"
+            pattern:
+              spec:
+                =(securityContext):
+                  =(privileged): "false"
+                containers:
+                - securityContext:
+                    =(privileged): "false"
+
+---
+# Sealed Secrets Controller
+apiVersion: v2
+name: sealed-secrets
+description: Sealed Secrets Controller for GitOps workflows
+version: 1.0.0
+
+# Sealed Secrets Values
+sealedSecrets:
+  image:
+    repository: quay.io/bitnami/sealed-secrets-controller
+    tag: v0.24.2
+  
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 2000m
+      memory: 1024Mi
+  
+  keyrenewperiod: 720h
+  
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+---
+# Security Scanning Pipeline
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: security-scan-pipeline
+  namespace: security-system
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: security-scanner
+          containers:
+          - name: scanner
+            image: aquasec/trivy:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting security scan pipeline..."
+              
+              # Scan cluster for vulnerabilities
+              trivy k8s --report summary cluster
+              
+              # Scan images in registry
+              trivy image --severity HIGH,CRITICAL registry.spicybiryaniwala.shop/app:latest
+              
+              # Generate compliance report
+              trivy k8s --compliance k8s-cis cluster > /reports/compliance-report.json
+              
+              echo "Security scan completed"
+            volumeMounts:
+            - name: reports
+              mountPath: /reports
+          volumes:
+          - name: reports
+            persistentVolumeClaim:
+              claimName: security-reports
+          restartPolicy: OnFailure
+
+---
+# Security Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-dashboard
+  namespace: security-system
+  labels:
+    grafana_dashboard: "1"
+data:
+  security-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Security Overview",
+        "tags": ["security", "kubernetes"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Vulnerability Count by Severity",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum by (severity) (trivy_vulnerability_count)",
+                "legendFormat": "{{severity}}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Policy Violations",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(gatekeeper_violations_total[5m])",
+                "legendFormat": "{{violation_kind}}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Falco Alerts",
+            "type": "logs",
+            "targets": [
+              {
+                "expr": "{job=\"falco\"} |= \"Priority\"",
+                "legendFormat": ""
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-24h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

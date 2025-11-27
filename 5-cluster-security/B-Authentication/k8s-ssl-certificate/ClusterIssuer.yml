@@ -1,0 +1,26 @@
+
+# kubectl apply -f clusterissuer-godaddy.yaml
+# Check if ready:
+# kubectl get clusterissuer letsencrypt-godaddy
+
+#It should show READY True.
+# -------------------------------- values.yaml---------#
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-godaddy
+spec:
+  acme:
+    email: your-email@ninjacart.in
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-godaddy-key
+    solvers:
+      - dns01:
+          godaddy:
+            apiKeySecretRef:
+              name: godaddy-api-secret
+              key: api-key
+            apiSecretSecretRef:
+              name: godaddy-api-secret
+              key: api-secret

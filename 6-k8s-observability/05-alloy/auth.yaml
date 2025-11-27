@@ -1,0 +1,9 @@
+apiVersion: v1
+data:
+  auth: b2JzZXJ2ZTokYXByMSQ2Mm1maW54SyRkc3JjYWoxZk1jRlRZeDFrQmoxWlYu
+  observe: JGFwcjEkNjJtZmlueEskZHNyY2FqMWZNY0ZUWXgxa0JqMVpWLg==
+kind: Secret
+metadata:
+  name: auth
+  namespace: observe
+type: Opaque

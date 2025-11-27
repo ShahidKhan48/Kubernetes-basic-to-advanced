@@ -1,0 +1,17 @@
+apiVersion: v2
+name: agent
+description: A Helm chart for managing agent installation
+type: application
+version: 0.0.1
+appVersion: 0.0.1
+
+dependencies:
+- name: k8s-monitoring
+  repository:  https://grafana.github.io/helm-charts
+  version: 1.4.6
+# - name: kube-state-metrics
+#   repository: https://prometheus-community.github.io/helm-charts
+#   version: 5.25.1
+# - name: prometheus-node-exporter
+#   repository: https://prometheus-community.github.io/helm-charts
+#   version: 4.38.0

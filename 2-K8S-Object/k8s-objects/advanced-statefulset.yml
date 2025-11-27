@@ -1,0 +1,188 @@
+# Advanced MySQL StatefulSet with Master-Slave Setup
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-master
+  labels:
+    app: mysql
+    role: master
+spec:
+  serviceName: mysql-master-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+      role: master
+  template:
+    metadata:
+      labels:
+        app: mysql
+        role: master
+    spec:
+      initContainers:
+      - name: mysql-init
+        image: mysql:8.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          mkdir -p /etc/mysql/conf.d
+          cat > /etc/mysql/conf.d/master.cnf << EOF
+          [mysqld]
+          server-id = 1
+          log-bin = mysql-bin
+          binlog-format = ROW
+          EOF
+        volumeMounts:
+        - name: mysql-config
+          mountPath: /etc/mysql/conf.d
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root-password
+        - name: MYSQL_REPLICATION_USER
+          value: "replicator"
+        - name: MYSQL_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: replication-password
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mysql
+            - -e
+            - "SELECT 1"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+        - name: mysql-config
+          mountPath: /etc/mysql/conf.d
+      - name: mysql-exporter
+        image: prom/mysqld-exporter:latest
+        ports:
+        - containerPort: 9104
+        env:
+        - name: DATA_SOURCE_NAME
+          value: "root:$(MYSQL_ROOT_PASSWORD)@(localhost:3306)/"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+      volumes:
+      - name: mysql-config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+# MySQL Slave StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-slave
+  labels:
+    app: mysql
+    role: slave
+spec:
+  serviceName: mysql-slave-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mysql
+      role: slave
+  template:
+    metadata:
+      labels:
+        app: mysql
+        role: slave
+    spec:
+      initContainers:
+      - name: mysql-slave-init
+        image: mysql:8.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          SERVER_ID=$(echo $HOSTNAME | grep -o '[0-9]*$')
+          SERVER_ID=$((SERVER_ID + 10))
+          mkdir -p /etc/mysql/conf.d
+          cat > /etc/mysql/conf.d/slave.cnf << EOF
+          [mysqld]
+          server-id = $SERVER_ID
+          log-bin = mysql-bin
+          read-only = ON
+          EOF
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: mysql-config
+          mountPath: /etc/mysql/conf.d
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root-password
+        - name: MYSQL_MASTER_SERVICE
+          value: "mysql-master-headless"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+        - name: mysql-config
+          mountPath: /etc/mysql/conf.d
+      volumes:
+      - name: mysql-config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 100Gi

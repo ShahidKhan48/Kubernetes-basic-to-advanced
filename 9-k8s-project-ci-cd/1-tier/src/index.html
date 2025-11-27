@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Tech Blog</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="nav-container">
+                <h1 class="nav-logo">TechBlog</h1>
+                <ul class="nav-menu">
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section id="home" class="hero">
+            <div class="hero-content">
+                <h2>Welcome to My Tech Blog</h2>
+                <p>Exploring the latest in technology, programming, and DevOps</p>
+                <button onclick="loadPosts()" class="cta-button">Read Latest Posts</button>
+            </div>
+        </section>
+
+        <section class="blog-section">
+            <div class="container">
+                <h2>Latest Blog Posts</h2>
+                <div class="blog-controls">
+                    <input type="text" id="searchInput" placeholder="Search posts..." onkeyup="searchPosts()">
+                    <select id="categoryFilter" onchange="filterByCategory()">
+                        <option value="">All Categories</option>
+                        <option value="kubernetes">Kubernetes</option>
+                        <option value="docker">Docker</option>
+                        <option value="devops">DevOps</option>
+                        <option value="javascript">JavaScript</option>
+                    </select>
+                    <button onclick="showAddPostForm()" class="add-post-btn">Add New Post</button>
+                </div>
+                
+                <div id="blogPosts" class="blog-grid"></div>
+                
+                <div id="addPostModal" class="modal">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeAddPostForm()">&times;</span>
+                        <h3>Add New Blog Post</h3>
+                        <form id="addPostForm">
+                            <input type="text" id="postTitle" placeholder="Post Title" required>
+                            <select id="postCategory" required>
+                                <option value="">Select Category</option>
+                                <option value="kubernetes">Kubernetes</option>
+                                <option value="docker">Docker</option>
+                                <option value="devops">DevOps</option>
+                                <option value="javascript">JavaScript</option>
+                            </select>
+                            <textarea id="postContent" placeholder="Post Content" rows="6" required></textarea>
+                            <input type="text" id="postAuthor" placeholder="Author Name" required>
+                            <button type="submit">Publish Post</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="about" class="about-section">
+            <div class="container">
+                <h2>About This Blog</h2>
+                <p>This is a simple static blog application built with HTML, CSS, and JavaScript. It demonstrates:</p>
+                <ul>
+                    <li>Responsive web design</li>
+                    <li>Local storage for data persistence</li>
+                    <li>Dynamic content manipulation</li>
+                    <li>Modern CSS Grid and Flexbox</li>
+                    <li>Vanilla JavaScript functionality</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 TechBlog. Built with ❤️ for Kubernetes deployment.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

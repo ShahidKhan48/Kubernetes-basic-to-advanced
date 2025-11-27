@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-kafka-monitoring-kafka-metrics.json-kafka-metrics
+  annotations:
+    grafana_folder: "kafka-monitoring"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-kafka-monitoring-kafka-overview.json-kafka-overview
+  annotations:
+    grafana_folder: "kafka-monitoring"
+---
+

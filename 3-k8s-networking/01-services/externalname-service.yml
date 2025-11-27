@@ -1,0 +1,76 @@
+# ExternalName Service Examples
+
+---
+# Basic ExternalName Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database
+  labels:
+    app: external-db
+spec:
+  type: ExternalName
+  externalName: database.example.com
+  ports:
+  - port: 5432
+    protocol: TCP
+
+---
+# External API Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-api
+  labels:
+    app: external-service
+spec:
+  type: ExternalName
+  externalName: api.external-service.com
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+  - name: http
+    port: 80
+    protocol: TCP
+
+---
+# External Cache Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-redis
+  labels:
+    app: redis
+    type: external
+spec:
+  type: ExternalName
+  externalName: redis.cache-cluster.amazonaws.com
+  ports:
+  - port: 6379
+    protocol: TCP
+
+---
+# Custom Endpoints for External Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: legacy-system
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: legacy-system
+subsets:
+- addresses:
+  - ip: 192.168.1.100
+  - ip: 192.168.1.101
+  ports:
+  - port: 8080
+    protocol: TCP

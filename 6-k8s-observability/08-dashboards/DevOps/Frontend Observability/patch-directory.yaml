@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-frontend-observability-grafana-faro-frontend-monitoring
+  annotations:
+    grafana_folder: "DevOps/Frontend Observability"
+---
+

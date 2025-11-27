@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-pod
+  labels:
+    app: emptydir-demo
+spec:
+  containers:
+  - name: writer
+    image: busybox
+    command: ['sh', '-c', 'echo "Hello World" > /shared/message.txt && sleep 3600']
+    volumeMounts:
+    - name: shared-storage
+      mountPath: /shared
+  - name: reader
+    image: busybox
+    command: ['sh', '-c', 'while true; do cat /shared/message.txt 2>/dev/null || echo "No file"; sleep 10; done']
+    volumeMounts:
+    - name: shared-storage
+      mountPath: /shared
+  volumes:
+  - name: shared-storage
+    emptyDir: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-memory-pod
+spec:
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: cache-volume
+      mountPath: /var/cache/nginx
+  volumes:
+  - name: cache-volume
+    emptyDir:
+      medium: Memory
+      sizeLimit: 1Gi

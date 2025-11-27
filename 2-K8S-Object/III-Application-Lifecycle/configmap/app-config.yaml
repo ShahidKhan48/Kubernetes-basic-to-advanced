@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    app: web-application
+data:
+  # Database configuration
+  database_host: "postgres.spicybiryaniwala.shop"
+  database_port: "5432"
+  database_name: "production_db"
+  database_pool_size: "20"
+  
+  # Application settings
+  app_name: "Spicy Biryani Wala"
+  app_version: "v1.0.0"
+  log_level: "info"
+  log_format: "json"
+  
+  # Feature flags
+  feature_new_ui: "true"
+  feature_analytics: "true"
+  feature_payment_gateway: "razorpay"
+  
+  # Cache settings
+  redis_host: "redis.spicybiryaniwala.shop"
+  redis_port: "6379"
+  cache_ttl: "3600"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  labels:
+    app: nginx-proxy
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    http {
+        upstream backend {
+            server backend-service:8080;
+        }
+        
+        server {
+            listen 80;
+            server_name spicybiryaniwala.shop www.spicybiryaniwala.shop;
+            
+            location / {
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+            
+            location /health {
+                return 200 "OK";
+                add_header Content-Type text/plain;
+            }
+            
+            location /api/ {
+                proxy_pass http://backend/api/;
+                proxy_set_header Host $host;
+            }
+        }
+    }
+  
+  default.conf: |
+    server {
+        listen 80 default_server;
+        server_name _;
+        return 444;
+    }

@@ -1,0 +1,258 @@
+# Deployment with Private Registry Images
+apiVersion: v1
+kind: Secret
+metadata:
+  name: private-registry-secret
+  namespace: default
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJwcml2YXRlLXJlZ2lzdHJ5LmNvbSI6eyJ1c2VybmFtZSI6InVzZXIiLCJwYXNzd29yZCI6InBhc3N3b3JkIiwiYXV0aCI6ImRYTmxjanB3WVhOemQyOXlaQT09In19fQ==
+
+---
+# Alternative: Create secret imperatively
+# kubectl create secret docker-registry private-registry-secret \
+#   --docker-server=private-registry.com \
+#   --docker-username=user \
+#   --docker-password=password \
+#   --docker-email=user@company.com
+
+---
+# Deployment using Private Registry
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: private-app-deployment
+  namespace: default
+  labels:
+    app: private-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: private-app
+  template:
+    metadata:
+      labels:
+        app: private-app
+    spec:
+      # Image pull secrets for private registry
+      imagePullSecrets:
+      - name: private-registry-secret
+      
+      containers:
+      - name: private-app
+        image: private-registry.com/mycompany/myapp:v1.0.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: APP_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        # Always pull image to get latest version
+        imagePullPolicy: Always
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Deployment with Multiple Private Registries
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-registry-deployment
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: multi-registry-app
+  template:
+    metadata:
+      labels:
+        app: multi-registry-app
+    spec:
+      # Multiple image pull secrets
+      imagePullSecrets:
+      - name: registry1-secret
+      - name: registry2-secret
+      - name: gcr-secret
+      
+      containers:
+      # Container from first private registry
+      - name: app-container
+        image: registry1.company.com/app:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      
+      # Sidecar from second private registry
+      - name: monitoring-sidecar
+        image: registry2.company.com/monitoring:v2.1
+        ports:
+        - containerPort: 9090
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      
+      # Container from Google Container Registry
+      - name: logging-sidecar
+        image: gcr.io/myproject/logger:v1.5
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+
+---
+# ServiceAccount with ImagePullSecrets
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: private-registry-sa
+  namespace: default
+imagePullSecrets:
+- name: private-registry-secret
+- name: gcr-secret
+
+---
+# Deployment using ServiceAccount with ImagePullSecrets
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sa-based-deployment
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sa-based-app
+  template:
+    metadata:
+      labels:
+        app: sa-based-app
+    spec:
+      # Use ServiceAccount with imagePullSecrets
+      serviceAccountName: private-registry-sa
+      
+      containers:
+      - name: app
+        image: private-registry.com/myapp:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+# AWS ECR Example
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ecr-registry-secret
+  namespace: default
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: <base64-encoded-docker-config>
+
+---
+# Deployment with AWS ECR
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecr-app-deployment
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ecr-app
+  template:
+    metadata:
+      labels:
+        app: ecr-app
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      
+      containers:
+      - name: app
+        image: 123456789012.dkr.ecr.us-west-2.amazonaws.com/myapp:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: AWS_REGION
+          value: "us-west-2"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+# Azure Container Registry Example
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acr-app-deployment
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: acr-app
+  template:
+    metadata:
+      labels:
+        app: acr-app
+    spec:
+      imagePullSecrets:
+      - name: acr-registry-secret
+      
+      containers:
+      - name: app
+        image: myregistry.azurecr.io/myapp:v1.0
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

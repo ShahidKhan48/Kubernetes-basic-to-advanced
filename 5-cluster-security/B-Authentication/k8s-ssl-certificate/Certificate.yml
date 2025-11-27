@@ -1,0 +1,32 @@
+# kubectl apply -f certificate-prod-bifrost-v2.yaml
+Check status:
+
+#kubectl describe certificate prod-bifrost-v2-cert -n prod-bifrost-v2
+# Once ready, it will automatically create the secret prod-cert which your Ingress can reference.
+
+#Step 4: Update Ingress
+#Make sure your Ingress references the prod-cert secret:
+
+spec:
+  tls:
+    - hosts:
+        - bifrost-v2.ninjacart.in
+      secretName: prod-cert
+#Apply Ingress changes:
+
+#kubectl apply -f prod-bifrost-v2-ingress.yaml
+# ---------------------------------------------
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prod-bifrost-v2-cert
+  namespace: prod-bifrost-v2
+spec:
+  secretName: prod-cert
+  issuerRef:
+    name: letsencrypt-godaddy
+    kind: ClusterIssuer
+  commonName: bifrost-v2.ninjacart.in
+  dnsNames:
+    - bifrost-v2.ninjacart.in

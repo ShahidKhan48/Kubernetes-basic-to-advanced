@@ -1,0 +1,230 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: database-pv
+  labels:
+    type: local
+    app: database
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /data/spicybiryaniwala/database
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: web-content-pv
+  labels:
+    type: local
+    app: web-content
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+  - ReadWriteMany  # Multiple pods can read/write
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /data/spicybiryaniwala/web-content
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: logs-pv
+  labels:
+    type: local
+    app: logs
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete  # Auto-delete when claim is deleted
+  storageClassName: manual
+  hostPath:
+    path: /data/spicybiryaniwala/logs
+    type: DirectoryOrCreate
+---
+# PersistentVolumeClaims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: database-pvc
+  labels:
+    app: database
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi  # Less than PV capacity
+  storageClassName: manual
+  selector:
+    matchLabels:
+      app: database
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: web-content-pvc
+  labels:
+    app: web-content
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+  storageClassName: manual
+  selector:
+    matchLabels:
+      app: web-content
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logs-pvc
+  labels:
+    app: logs
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: manual
+  selector:
+    matchLabels:
+      app: logs
+---
+# Database StatefulSet using PVC
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-statefulset
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        ports:
+        - containerPort: 5432
+        
+        env:
+        - name: POSTGRES_DB
+          value: "spicybiryaniwala"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: database-pvc
+---
+# Web application using shared storage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-deployment
+  labels:
+    app: web-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        volumeMounts:
+        # Shared web content (ReadWriteMany)
+        - name: web-content
+          mountPath: /app/static
+        
+        # Application logs
+        - name: app-logs
+          mountPath: /app/logs
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      
+      volumes:
+      - name: web-content
+        persistentVolumeClaim:
+          claimName: web-content-pvc
+      
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: logs-pvc
+---
+# Secret for database
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+data:
+  password: cG9zdGdyZXNfcGFzc3dvcmRfMTIz  # postgres_password_123
+---
+# Service for database
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP

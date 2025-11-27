@@ -1,0 +1,290 @@
+# Mimir Configuration Changes Documentation
+# EKS Production Cluster - spicybiryaniwala.shop Domain
+
+## FILES CREATED:
+1. mimir-values-eks-prod.yml (New production values file)
+2. example-eks-prod.yaml (Updated example configuration)
+
+## TOTAL CONFIGURATION STEPS: 18
+
+## CHANGES MADE:
+
+### STEP 1: DOMAIN AND INGRESS CONFIGURATION
+CHANGED:
+- Ingress host: Added mimir.spicybiryaniwala.shop
+- TLS certificate: mimir-tls secret
+- Rate limiting: 1000 requests/minute
+
+LOCATIONS:
+- nginx.ingress.hosts
+- nginx.ingress.tls
+- nginx.ingress.annotations
+
+### STEP 2: CLUSTER IDENTIFICATION
+CHANGED:
+- Cluster label: eks-prod
+- Environment: production
+- Namespace: monitoring (from observe)
+
+LOCATIONS:
+- metaMonitoring.serviceMonitor.clusterLabel
+- memberlist.cluster_label
+
+### STEP 3: S3 STORAGE CONFIGURATION
+CHANGED:
+- S3 buckets: spicy-mimir-blocks-prod, spicy-mimir-ruler-prod, spicy-mimir-alertmanager-prod
+- Region: us-east-1
+- Disabled MinIO (enabled: false)
+
+LOCATIONS:
+- blocks_storage.s3.bucket_name
+- ruler_storage.s3.bucket_name
+- alertmanager_storage.s3.bucket_name
+- minio.enabled
+
+### STEP 4: AUTHENTICATION CONFIGURATION
+CHANGED:
+- Basic auth password: SpicyBiryani2024!
+- Tenant ID: _spicy_prod (from observe)
+- Username: observe (consistent)
+
+LOCATIONS:
+- nginx.basicAuth.password
+- continuous_test.auth.tenant
+- continuous_test.auth.password
+
+### STEP 5: PRODUCTION SCALING
+CHANGED:
+- Distributor replicas: 3 → 5
+- Ingester replicas: 3 → 6
+- Querier replicas: 2 → 6
+- Query frontend replicas: 2 → 3
+- Query scheduler replicas: 2 → 3
+- Store gateway replicas: 3 → 6
+- Compactor replicas: 1 → 2
+- Alertmanager replicas: 2 → 3
+- Gateway replicas: 1 → 3
+
+LOCATIONS:
+- [component].replicas
+
+### STEP 6: RESOURCE ALLOCATION
+CHANGED:
+- Distributor: CPU 1000m→2000m, Memory 2Gi→4Gi
+- Ingester: CPU 2000m→4000m, Memory 8Gi→16Gi
+- Querier: CPU 1000m→2000m, Memory 4Gi→8Gi
+- Store Gateway: CPU 1000m→2000m, Memory 4Gi→8Gi
+- Compactor: CPU 1000m→2000m, Memory 4Gi→8Gi
+
+LOCATIONS:
+- [component].resources.requests
+- [component].resources.limits
+
+### STEP 7: STORAGE CONFIGURATION
+CHANGED:
+- Storage class: "" → gp3 (AWS EBS GP3)
+- Ingester PV: 20Gi → 50Gi
+- Store Gateway PV: 10Gi → 20Gi
+- Compactor PV: 20Gi → 50Gi
+- Alertmanager PV: 5Gi → 10Gi
+
+LOCATIONS:
+- [component].persistentVolume.size
+- [component].persistentVolume.storageClassName
+
+### STEP 8: CACHE SIZING
+CHANGED:
+- Results cache: 500MB → 2048MB, replicas 2 → 3
+- Chunks cache: 500MB → 4096MB, replicas 2 → 3
+- Index cache: replicas 3 → 3, memory 2048MB
+- Metadata cache: replicas 2 → 3, memory 1024MB
+
+LOCATIONS:
+- [cache-type].allocatedMemory
+- [cache-type].replicas
+- [cache-type].maxItemMemory
+
+### STEP 9: EKS IAM INTEGRATION
+ADDED:
+- ServiceAccount annotation: eks.amazonaws.com/role-arn
+- IAM role: arn:aws:iam::123456789012:role/mimir-eks-role
+- AWS region environment variable
+
+LOCATIONS:
+- serviceAccount.annotations
+- global.extraEnv
+
+### STEP 10: NODE SCHEDULING
+ADDED:
+- Node selector: node-type: monitoring, kubernetes.io/arch: amd64
+- Tolerations: workloadType=monitoring
+- Pod anti-affinity for ingester and store-gateway
+
+LOCATIONS:
+- [component].nodeSelector
+- [component].tolerations
+- [component].affinity
+
+### STEP 11: PERFORMANCE LIMITS
+CHANGED:
+- Max global series per user: 12000000 → 20000000
+- Max global series per metric: 0 → 100000
+- Ingestion rate: 400000 → 500000
+- Ingestion burst: 8000000 → 1000000
+- Max concurrent queries: 16 → 32
+- Outstanding requests: 800 → 1600
+
+LOCATIONS:
+- limits.max_global_series_per_user
+- limits.max_global_series_per_metric
+- limits.ingestion_rate
+- limits.ingestion_burst_size
+- querier.max_concurrent
+- query_scheduler.max_outstanding_requests_per_tenant
+
+### STEP 12: HIGH AVAILABILITY
+ADDED:
+- Zone awareness: enabled for ingester and store-gateway
+- Replication factor: 3 for ingester and store-gateway
+- Pod disruption budgets for all components
+- Anti-affinity rules for critical components
+
+LOCATIONS:
+- [component].zoneAwareReplication.enabled
+- ingester.ring.replication_factor
+- store_gateway.sharding_ring.replication_factor
+
+### STEP 13: MONITORING INTEGRATION
+CHANGED:
+- ServiceMonitor labels: Added app: mimir, release: monitor
+- Cluster label: eks-prod
+- Scrape interval: 30s (maintained)
+
+LOCATIONS:
+- metaMonitoring.serviceMonitor.labels
+- metaMonitoring.serviceMonitor.clusterLabel
+
+### STEP 14: COMPACTOR OPTIMIZATION
+CHANGED:
+- Compaction interval: 30m (maintained)
+- Max closing blocks: 2 → 4
+- Max opening blocks: 4 → 8
+- Symbols flushers: 4 → 8
+
+LOCATIONS:
+- compactor.max_closing_blocks_concurrency
+- compactor.max_opening_blocks_concurrency
+- compactor.symbols_flushers_concurrency
+
+### STEP 15: DISTRIBUTOR LIMITS
+CHANGED:
+- Max ingestion rate: 60000 → 500000
+- Max inflight requests: 2500 → 5000
+- Instance limits aligned with global limits
+
+LOCATIONS:
+- distributor.instance_limits.max_ingestion_rate
+- distributor.instance_limits.max_inflight_push_requests
+
+### STEP 16: RUNTIME CONFIGURATION
+CHANGED:
+- Ingester max inflight: 2500 → 5000
+- Ingester max rate: 300000 → 500000
+- Ingester max series: 10000000 → 20000000
+
+LOCATIONS:
+- runtimeConfig.ingester_limits
+
+### STEP 17: MEMBERLIST CONFIGURATION
+CHANGED:
+- Cluster label: Updated to monitoring namespace
+- Bind address: ${MY_POD_IP}
+- Join members: DNS-based discovery
+
+LOCATIONS:
+- memberlist.cluster_label
+- memberlist.bind_addr
+- memberlist.join_members
+
+### STEP 18: SSL AND SECURITY
+ADDED:
+- Let's Encrypt SSL certificates
+- SSL redirect enforcement
+- Rate limiting on ingress
+- Secure basic authentication
+
+LOCATIONS:
+- nginx.ingress.annotations
+- nginx.basicAuth
+
+## WHAT NEEDS TO BE MANAGED:
+
+### MANUAL CONFIGURATION REQUIRED:
+1. **AWS S3 Buckets** (HIGH PRIORITY):
+   - Create S3 buckets: spicy-mimir-blocks-prod, spicy-mimir-ruler-prod, spicy-mimir-alertmanager-prod
+   - Configure bucket policies and lifecycle rules
+   - Setup cross-region replication if needed
+
+2. **EKS IAM Roles** (HIGH PRIORITY):
+   - Create IAM role: mimir-eks-role
+   - Attach S3 access policies
+   - Configure OIDC provider trust relationship
+
+3. **DNS Configuration** (HIGH PRIORITY):
+   - Configure mimir.spicybiryaniwala.shop DNS record
+   - Point to load balancer endpoint
+
+4. **SSL Certificates** (HIGH PRIORITY):
+   - Setup cert-manager
+   - Configure Let's Encrypt issuer
+   - Verify SSL certificate generation
+
+5. **Node Groups** (MEDIUM PRIORITY):
+   - Create monitoring node group with node-type: monitoring label
+   - Configure taints: workloadType=monitoring
+   - Use appropriate instance types (m5.large, m5.xlarge)
+
+### WHAT REMAINS DEFAULT:
+1. **Mimir Version**: 3.0.0 (latest stable)
+2. **Chart Version**: 6.0.3 (latest)
+3. **Memcached Version**: 1.6.22-alpine
+4. **Log Level**: info
+5. **Log Format**: logfmt
+6. **Retention Period**: 90 days
+7. **Compaction Interval**: 30 minutes
+8. **Out of Order Window**: 1 hour
+9. **GRPC Settings**: Standard timeouts and limits
+10. **Activity Tracker**: Enabled with standard path
+
+## DEPLOYMENT COMMANDS:
+```bash
+# Deploy Mimir to EKS production
+helm upgrade --install mimir grafana/mimir-distributed \
+  -f example-eks-prod.yaml \
+  -n monitoring --create-namespace
+
+# Or using values file
+helm upgrade --install mimir grafana/mimir-distributed \
+  -f mimir-values-eks-prod.yml \
+  -n monitoring --create-namespace
+```
+
+## VERIFICATION STEPS:
+1. Check all pods: kubectl get pods -n monitoring -l app.kubernetes.io/name=mimir
+2. Verify ingress: kubectl get ingress -n monitoring
+3. Test URL: https://mimir.spicybiryaniwala.shop
+4. Check S3 buckets: aws s3 ls | grep spicy-mimir
+5. Verify metrics ingestion: Check Grafana datasource
+
+## TROUBLESHOOTING:
+- If pods fail: Check node selectors, tolerations, and resource requests
+- If ingress fails: Verify DNS, certificates, and load balancer
+- If S3 fails: Check IAM roles, bucket policies, and region settings
+- If performance issues: Monitor resource usage and adjust limits
+- If cache issues: Check memcached pods and connectivity
+
+## MONITORING ENDPOINTS:
+- Mimir Gateway: https://mimir.spicybiryaniwala.shop
+- Prometheus endpoint: https://mimir.spicybiryaniwala.shop/prometheus
+- Alertmanager: https://mimir.spicybiryaniwala.shop/alertmanager
+- Ruler API: https://mimir.spicybiryaniwala.shop/ruler

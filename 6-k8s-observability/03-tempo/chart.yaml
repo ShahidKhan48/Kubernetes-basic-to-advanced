@@ -1,0 +1,22 @@
+apiVersion: v2
+name: tempo-distributed
+description: Grafana Tempo for distributed tracing
+type: application
+version: 1.56.0
+appVersion: 2.9.0
+home: https://grafana.com/oss/tempo/
+sources:
+  - https://github.com/grafana/tempo
+  - https://github.com/grafana/helm-charts
+keywords:
+  - monitoring
+  - tracing
+  - observability
+  - opentelemetry
+maintainers:
+  - name: Grafana Labs
+    url: https://grafana.com
+dependencies:
+  - name: tempo-distributed
+    version: 1.56.0
+    repository: https://grafana.github.io/helm-charts

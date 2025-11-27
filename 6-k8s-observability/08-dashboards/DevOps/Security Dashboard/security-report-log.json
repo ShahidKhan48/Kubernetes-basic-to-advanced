@@ -1,0 +1,337 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 355,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 9,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{namespace=~\"platform|trader-platform|loans|user-growth|fintech\"} |~ \"401 Unauthorized|403 Forbidden|Failed password|Login incorrect|authentication failure\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Unauthorized Access Attempts",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 8,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{namespace=~\"platform|trader-platform|loans|user-growth|fintech\"}|~ \"SQLIntegrityConstraintViolationException|SQLDataException|SQLSyntaxErrorException\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Potential SQL Injection Attempts",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{namespace=~\"platform|trader-platform|loans|user-growth|fintech\"} |~ `AccessDeniedException|CsrfException|InvalidCsrfTokenException|MissingCsrfTokenException|CookieTheftException|InvalidCookieException|RequestRejectedException`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Access and CSRF-Related Security Exceptions",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      },
+      "id": 1,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{app=\"ingress-nginx\"} \r\n|~ \"(GET|POST|HEAD|OPTIONS|PUT|DELETE|TRACE|CONNECT)\"\r\n|~ \"(?:sqlmap|nmap|dirbuster|nikto|commix|wpscan|fimap|metasploit|curl|wget|python)\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Potential Malicious Request Attempted",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 9
+      },
+      "id": 7,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{app=~\"matrix-synapse|bnpl-.*\" } |~ `DataError|IntegrityError|ProgrammingError|OperationalError`\r\n",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Python SQL Exception",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "description": "",
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 9
+      },
+      "id": 6,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{namespace=~\"gtp\"} |~ \"node:child_process|spawned process\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Node.js Child Process Detected",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "id": 3,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{app=\"ingress-nginx\"} |= `exited on signal 6 (core dumped)`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Abnormally Application Terminated/Crashed",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki_ds_trader_prod"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "id": 5,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki_ds_trader_prod"
+          },
+          "editorMode": "code",
+          "expr": "{namespace=~\"platform|trader-platform|loans|user-growth|fintech\"} |~ `ExpressionException`\r\n",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Monitoring Spring Expression Exceptions",
+      "type": "logs"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Security Report (Log)",
+  "uid": "ddnxkahz40iyod",
+  "version": 17,
+  "weekStart": ""
+}

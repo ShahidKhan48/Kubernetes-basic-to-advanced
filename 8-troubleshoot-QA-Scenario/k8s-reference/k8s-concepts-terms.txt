@@ -1,0 +1,408 @@
+KUBERNETES CONCEPTS & TERMS - COMPLETE LIST
+
+=== BASIC CONCEPTS ===
+
+1. LABELS
+   - Key-value pairs attached to objects for identification
+   - Used for grouping and selecting resources
+   - Example: app=frontend, version=v1.0
+
+2. SELECTORS
+   - Used to filter objects based on labels
+   - Types: Equality-based (=, !=) and Set-based (in, notin, exists)
+   - Example: app=frontend, environment in (prod, staging)
+
+3. ANNOTATIONS
+   - Key-value metadata for storing non-identifying information
+   - Used by tools, libraries, and clients
+   - Example: kubernetes.io/created-by, deployment.kubernetes.io/revision
+
+4. NAMESPACES
+   - Virtual clusters within a physical cluster
+   - Provides scope for names and resource isolation
+   - Default namespaces: default, kube-system, kube-public
+
+5. FINALIZERS
+   - Keys that tell Kubernetes to wait until specific conditions are met before deleting object
+   - Prevents accidental deletion of resources
+   - Example: kubernetes.io/pv-protection
+
+=== POD LIFECYCLE & MANAGEMENT ===
+
+6. POD LIFECYCLE
+   - Phases: Pending, Running, Succeeded, Failed, Unknown
+   - Container states: Waiting, Running, Terminated
+   - Pod conditions: PodScheduled, Ready, Initialized, ContainersReady
+
+7. INIT CONTAINERS
+   - Specialized containers that run before app containers
+   - Must complete successfully before app containers start
+   - Used for setup tasks, waiting for dependencies
+
+8. SIDECAR CONTAINERS
+   - Helper containers that run alongside main application container
+   - Share same Pod lifecycle, network, and storage
+   - Example: logging agents, monitoring, proxies
+
+9. EPHEMERAL CONTAINERS
+   - Temporary containers for debugging running Pods
+   - Added to existing Pods for troubleshooting
+   - Don't have resource guarantees or restart policies
+
+=== HEALTH CHECKS & PROBES ===
+
+10. LIVENESS PROBE
+    - Determines if container is running and healthy
+    - Kubernetes restarts container if probe fails
+    - Types: HTTP, TCP, Exec, gRPC
+
+11. READINESS PROBE
+    - Determines if container is ready to serve traffic
+    - Pod removed from service endpoints if probe fails
+    - Same types as liveness probe
+
+12. STARTUP PROBE
+    - Checks if application has started successfully
+    - Disables liveness/readiness probes until startup succeeds
+    - Useful for slow-starting containers
+
+=== SCHEDULING & PLACEMENT ===
+
+13. NODE SELECTOR
+    - Simple way to constrain Pods to nodes with specific labels
+    - Uses key-value pairs to match node labels
+    - Example: disktype=ssd, zone=us-west1
+
+14. AFFINITY
+    - More expressive way to control Pod placement
+    - Node Affinity: attracts Pods to nodes
+    - Pod Affinity: co-locate Pods together
+
+15. ANTI-AFFINITY
+    - Repels Pods from nodes or other Pods
+    - Used for spreading Pods across nodes/zones
+    - Ensures high availability and fault tolerance
+
+16. TAINTS
+    - Applied to nodes to repel Pods
+    - Prevents Pods from being scheduled unless they have matching tolerations
+    - Effects: NoSchedule, PreferNoSchedule, NoExecute
+
+17. TOLERATIONS
+    - Applied to Pods to tolerate node taints
+    - Allows Pods to be scheduled on tainted nodes
+    - Must match taint key, value, and effect
+
+18. TOPOLOGY SPREAD CONSTRAINTS
+    - Controls how Pods are spread across topology domains
+    - Ensures even distribution across zones, nodes, etc.
+    - Helps with availability and resource utilization
+
+=== RESOURCE MANAGEMENT ===
+
+19. RESOURCE REQUESTS
+    - Minimum amount of CPU/memory Pod needs
+    - Used by scheduler to find suitable nodes
+    - Guaranteed resources for the Pod
+
+20. RESOURCE LIMITS
+    - Maximum amount of CPU/memory Pod can use
+    - Prevents resource overconsumption
+    - Container killed if memory limit exceeded
+
+21. QUALITY OF SERVICE (QoS)
+    - Classes: Guaranteed, Burstable, BestEffort
+    - Determines Pod eviction priority during resource pressure
+    - Based on requests and limits configuration
+
+22. LIMIT RANGES
+    - Enforces resource constraints in namespace
+    - Sets default/max/min values for requests and limits
+    - Applies to Pods, Containers, PVCs
+
+23. RESOURCE QUOTAS
+    - Limits total resource consumption in namespace
+    - Controls CPU, memory, storage, object counts
+    - Prevents resource exhaustion
+
+=== STORAGE CONCEPTS ===
+
+24. VOLUMES
+    - Provides persistent storage for Pods
+    - Types: emptyDir, hostPath, configMap, secret, PVC
+    - Survives container restarts within Pod
+
+25. PERSISTENT VOLUMES (PV)
+    - Cluster-level storage resource
+    - Independent of Pod lifecycle
+    - Provisioned by admin or dynamically
+
+26. PERSISTENT VOLUME CLAIMS (PVC)
+    - Request for storage by user/Pod
+    - Binds to available PV matching requirements
+    - Specifies size, access modes, storage class
+
+27. STORAGE CLASSES
+    - Defines types of storage available
+    - Enables dynamic provisioning of PVs
+    - Specifies provisioner, parameters, reclaim policy
+
+28. VOLUME MODES
+    - Filesystem: mounted as directory (default)
+    - Block: raw block device access
+    - Determines how volume is consumed
+
+29. ACCESS MODES
+    - ReadWriteOnce (RWO): single node read-write
+    - ReadOnlyMany (ROX): multiple nodes read-only
+    - ReadWriteMany (RWX): multiple nodes read-write
+
+=== NETWORKING CONCEPTS ===
+
+30. SERVICES
+    - Stable network endpoint for Pods
+    - Types: ClusterIP, NodePort, LoadBalancer, ExternalName
+    - Provides load balancing and service discovery
+
+31. ENDPOINTS
+    - List of IP addresses and ports for service backends
+    - Automatically managed by service controller
+    - Can be manually created for external services
+
+32. INGRESS
+    - HTTP/HTTPS routing to services
+    - Provides SSL termination, path-based routing
+    - Requires Ingress Controller to function
+
+33. NETWORK POLICIES
+    - Firewall rules for Pod-to-Pod communication
+    - Controls ingress and egress traffic
+    - Requires CNI plugin support
+
+34. DNS
+    - Automatic service discovery within cluster
+    - Services get DNS names: service.namespace.svc.cluster.local
+    - Pods get DNS records for hostname resolution
+
+35. CNI (Container Network Interface)
+    - Plugin architecture for Pod networking
+    - Examples: Calico, Flannel, Weave, Cilium
+    - Handles IP allocation and routing
+
+=== SECURITY CONCEPTS ===
+
+36. SERVICE ACCOUNTS
+    - Identity for Pods to access Kubernetes API
+    - Each namespace has default service account
+    - Can be bound to roles for permissions
+
+37. RBAC (Role-Based Access Control)
+    - Authorization mechanism using roles and bindings
+    - Roles define permissions, bindings assign roles to subjects
+    - Namespace-scoped (Role) or cluster-scoped (ClusterRole)
+
+38. SECURITY CONTEXTS
+    - Security settings for Pods and containers
+    - Controls user ID, group ID, capabilities, SELinux
+    - Can be set at Pod or container level
+
+39. POD SECURITY STANDARDS
+    - Predefined security policies for Pods
+    - Levels: Privileged, Baseline, Restricted
+    - Replaces deprecated PodSecurityPolicy
+
+40. SECRETS
+    - Stores sensitive data like passwords, tokens, keys
+    - Base64 encoded (not encrypted by default)
+    - Can be mounted as volumes or environment variables
+
+41. CONFIG MAPS
+    - Stores non-sensitive configuration data
+    - Key-value pairs or file-like content
+    - Decouples configuration from container images
+
+=== WORKLOAD MANAGEMENT ===
+
+42. CONTROLLERS
+    - Manage desired state of resources
+    - Examples: Deployment, ReplicaSet, DaemonSet, StatefulSet
+    - Continuously reconcile actual vs desired state
+
+43. REPLICA SETS
+    - Ensures specified number of Pod replicas running
+    - Selects Pods using label selectors
+    - Usually managed by Deployments
+
+44. DEPLOYMENTS
+    - Manages ReplicaSets and provides rolling updates
+    - Supports rollback, scaling, pause/resume
+    - Declarative updates for Pods and ReplicaSets
+
+45. DAEMON SETS
+    - Ensures Pod runs on all (or selected) nodes
+    - Used for node-level services like logging, monitoring
+    - Automatically schedules Pods on new nodes
+
+46. STATEFUL SETS
+    - Manages stateful applications with stable identities
+    - Provides ordered deployment, scaling, and updates
+    - Stable network identities and persistent storage
+
+47. JOBS
+    - Runs Pods to completion for batch workloads
+    - Ensures specified number of successful completions
+    - Supports parallel execution and retry logic
+
+48. CRON JOBS
+    - Schedules Jobs to run at specific times
+    - Uses cron syntax for scheduling
+    - Manages Job history and concurrency
+
+=== AUTOSCALING ===
+
+49. HORIZONTAL POD AUTOSCALER (HPA)
+    - Automatically scales Pod replicas based on metrics
+    - Supports CPU, memory, and custom metrics
+    - Integrates with metrics server
+
+50. VERTICAL POD AUTOSCALER (VPA)
+    - Automatically adjusts Pod resource requests/limits
+    - Modes: Off, Initial, Auto, UpdateMode
+    - Helps optimize resource utilization
+
+51. CLUSTER AUTOSCALER
+    - Automatically scales cluster nodes based on Pod demands
+    - Adds nodes when Pods can't be scheduled
+    - Removes underutilized nodes
+
+=== MONITORING & OBSERVABILITY ===
+
+52. METRICS SERVER
+    - Collects resource usage metrics from nodes and Pods
+    - Required for HPA and kubectl top commands
+    - Lightweight cluster-wide aggregator
+
+53. EVENTS
+    - Records of what happened in cluster
+    - Generated by controllers, scheduler, kubelet
+    - Useful for debugging and monitoring
+
+54. LOGS
+    - Container stdout/stderr streams
+    - Accessible via kubectl logs command
+    - Can be forwarded to external logging systems
+
+55. HEALTH ENDPOINTS
+    - /healthz, /readyz, /livez endpoints on API server
+    - Used for monitoring cluster component health
+    - Supports different verbosity levels
+
+=== ADVANCED CONCEPTS ===
+
+56. CUSTOM RESOURCES (CRs)
+    - User-defined API objects extending Kubernetes
+    - Defined using CustomResourceDefinitions (CRDs)
+    - Enables domain-specific APIs
+
+57. OPERATORS
+    - Applications that use CRs and controllers
+    - Encode operational knowledge for complex applications
+    - Automate deployment, scaling, backup, recovery
+
+58. ADMISSION CONTROLLERS
+    - Plugins that intercept API requests before persistence
+    - Can validate, mutate, or reject requests
+    - Examples: ResourceQuota, LimitRanger, PodSecurityPolicy
+
+59. WEBHOOKS
+    - HTTP callbacks for extending Kubernetes functionality
+    - Types: Validating and Mutating admission webhooks
+    - Allow custom validation and modification logic
+
+60. GARBAGE COLLECTION
+    - Automatic cleanup of dependent objects
+    - Owner references establish parent-child relationships
+    - Cascading deletion removes dependent objects
+
+61. FIELD SELECTORS
+    - Filter resources based on field values
+    - Examples: metadata.name=my-pod, status.phase=Running
+    - More limited than label selectors
+
+62. OWNER REFERENCES
+    - Establishes parent-child relationships between objects
+    - Enables garbage collection of dependent resources
+    - Contains UID, name, and kind of owner
+
+=== CLUSTER MANAGEMENT ===
+
+63. ETCD
+    - Distributed key-value store for cluster state
+    - Stores all Kubernetes objects and configuration
+    - Requires backup and high availability setup
+
+64. API SERVER
+    - Central management component exposing Kubernetes API
+    - Validates and processes REST operations
+    - Stateless and horizontally scalable
+
+65. SCHEDULER
+    - Assigns Pods to nodes based on constraints and resources
+    - Considers affinity, taints, tolerations, resource requirements
+    - Pluggable with custom scheduling algorithms
+
+66. CONTROLLER MANAGER
+    - Runs controller processes managing cluster state
+    - Examples: Node, Replication, Endpoints controllers
+    - Watches API server and takes corrective actions
+
+67. KUBELET
+    - Node agent managing Pods and containers
+    - Communicates with API server and container runtime
+    - Handles Pod lifecycle and health reporting
+
+68. KUBE-PROXY
+    - Network proxy running on each node
+    - Implements service networking and load balancing
+    - Maintains network rules for service traffic
+
+=== TROUBLESHOOTING CONCEPTS ===
+
+69. DEBUG CONTAINERS
+    - Temporary containers for debugging Pods
+    - Share process namespace with target container
+    - Useful when main container lacks debugging tools
+
+70. PORT FORWARDING
+    - Forwards local port to Pod port
+    - Enables direct access to Pod services
+    - Useful for debugging and testing
+
+71. EXEC INTO PODS
+    - Execute commands inside running containers
+    - Interactive shell access for troubleshooting
+    - Requires container to have shell available
+
+72. RESOURCE MONITORING
+    - Track CPU, memory, disk, network usage
+    - kubectl top command for basic metrics
+    - Integration with monitoring systems like Prometheus
+
+=== POLICY & GOVERNANCE ===
+
+73. NETWORK POLICIES
+    - Define allowed network traffic between Pods
+    - Ingress and egress rules with selectors
+    - Requires CNI plugin support for enforcement
+
+74. POD DISRUPTION BUDGETS (PDB)
+    - Limits voluntary disruptions during maintenance
+    - Ensures minimum number of Pods remain available
+    - Protects against simultaneous Pod evictions
+
+75. RESOURCE POLICIES
+    - Governance rules for resource usage
+    - Implemented via LimitRanges and ResourceQuotas
+    - Prevents resource abuse and ensures fair sharing
+
+This comprehensive list covers all major Kubernetes concepts from basic Pod creation to advanced cluster management!

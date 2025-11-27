@@ -1,0 +1,187 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-with-init
+  labels:
+    app: init-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: init-demo
+  template:
+    metadata:
+      labels:
+        app: init-demo
+    spec:
+      initContainers:
+      # Database migration init container
+      - name: db-migration
+        image: spicybiryaniwala.shop/db-migrator:v1.0.0
+        command: ["migrate"]
+        args: ["up"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+        - name: MIGRATION_PATH
+          value: "/migrations"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      
+      # Wait for dependencies
+      - name: wait-for-services
+        image: busybox:1.35
+        command: ["sh", "-c"]
+        args:
+        - |
+          echo "Waiting for database..."
+          until nc -z postgres-service 5432; do
+            echo "Database not ready, waiting..."
+            sleep 2
+          done
+          
+          echo "Waiting for Redis..."
+          until nc -z redis-service 6379; do
+            echo "Redis not ready, waiting..."
+            sleep 2
+          done
+          
+          echo "All dependencies ready!"
+      
+      # Configuration setup
+      - name: config-setup
+        image: busybox:1.35
+        command: ["sh", "-c"]
+        args:
+        - |
+          echo "Setting up application configuration..."
+          
+          # Copy config templates
+          cp /config-templates/* /shared-config/
+          
+          # Set proper permissions
+          chmod 644 /shared-config/*
+          
+          # Generate dynamic config
+          cat > /shared-config/runtime.conf << EOF
+          # Generated at $(date)
+          server.port=8080
+          server.host=0.0.0.0
+          app.startup_time=$(date -Iseconds)
+          EOF
+          
+          echo "Configuration setup complete!"
+        
+        volumeMounts:
+        - name: config-templates
+          mountPath: /config-templates
+        - name: shared-config
+          mountPath: /shared-config
+      
+      # Cache warming
+      - name: cache-warmer
+        image: spicybiryaniwala.shop/cache-warmer:v1.0.0
+        command: ["warm-cache"]
+        env:
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: redis_host
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: redis-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+      
+      containers:
+      # Main application container
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+          name: http
+        
+        env:
+        - name: CONFIG_PATH
+          value: "/etc/app-config"
+        
+        volumeMounts:
+        - name: shared-config
+          mountPath: /etc/app-config
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      - name: config-templates
+        configMap:
+          name: app-config-templates
+      - name: shared-config
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-templates
+data:
+  app.properties: |
+    # Application configuration template
+    app.name=Spicy Biryani Wala
+    app.version=v1.0.0
+    
+    # Database settings (will be overridden by env vars)
+    database.pool.min=5
+    database.pool.max=20
+    database.timeout=30s
+    
+    # Logging configuration
+    logging.level=INFO
+    logging.format=JSON
+  
+  nginx.conf: |
+    server {
+        listen 8080;
+        server_name localhost;
+        
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+        
+        location /health {
+            return 200 "OK";
+            add_header Content-Type text/plain;
+        }
+    }

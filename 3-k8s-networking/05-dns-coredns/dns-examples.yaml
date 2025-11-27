@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+    
+    # Custom domain for spicybiryaniwala.shop
+    spicybiryaniwala.shop:53 {
+        errors
+        cache 30
+        # Forward to external DNS
+        forward . 8.8.8.8 8.8.4.4
+        log
+    }
+    
+    # Internal company domain
+    internal.company:53 {
+        errors
+        file /etc/coredns/internal.company.db
+        log
+    }
+---
+# Custom DNS entries for internal services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  internal.company.db: |
+    $ORIGIN internal.company.
+    @    3600 IN SOA sns.dns.icann.org. noc.dns.icann.org. (
+                                    2017042745 ; serial
+                                    7200       ; refresh (2 hours)
+                                    3600       ; retry (1 hour)
+                                    1209600    ; expire (2 weeks)
+                                    3600       ; minimum (1 hour)
+                                    )
+    
+    database    IN A     10.0.1.100
+    cache       IN A     10.0.1.101
+    monitoring  IN A     10.0.1.102
+    backup      IN A     10.0.1.103
+---
+# Test pod for DNS resolution
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-test-pod
+  labels:
+    app: dns-test
+spec:
+  containers:
+  - name: dns-test
+    image: busybox:1.35
+    command: ["sleep", "3600"]
+    
+    # Custom DNS configuration
+    dnsPolicy: "None"
+    dnsConfig:
+      nameservers:
+      - 10.96.0.10  # CoreDNS service IP
+      searches:
+      - default.svc.cluster.local
+      - svc.cluster.local
+      - cluster.local
+      - spicybiryaniwala.shop
+      options:
+      - name: ndots
+        value: "5"
+      - name: edns0
+---
+# Headless service for direct pod access
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-headless
+  labels:
+    app: database
+spec:
+  clusterIP: None  # Headless service
+  selector:
+    app: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+# StatefulSet with stable DNS names
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: database-cluster
+spec:
+  serviceName: database-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        - name: POSTGRES_DB
+          value: "spicybiryaniwala"
+        
+        # Each pod gets stable DNS name:
+        # database-cluster-0.database-headless.default.svc.cluster.local
+        # database-cluster-1.database-headless.default.svc.cluster.local
+        # database-cluster-2.database-headless.default.svc.cluster.local
+        
+        ports:
+        - containerPort: 5432
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+# External service with custom DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-api
+spec:
+  type: ExternalName
+  externalName: api.external-service.com
+  ports:
+  - port: 443
+    targetPort: 443
+---
+# Service with custom DNS policy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-custom-dns
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app-custom-dns
+  template:
+    metadata:
+      labels:
+        app: web-app-custom-dns
+    spec:
+      # Custom DNS configuration
+      dnsPolicy: "ClusterFirst"
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+        searches:
+        - spicybiryaniwala.shop
+        - internal.company
+      
+      containers:
+      - name: web-app
+        image: spicybiryaniwala.shop/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        
+        env:
+        # Use DNS names for service discovery
+        - name: DATABASE_HOST
+          value: "database-cluster-0.database-headless.default.svc.cluster.local"
+        - name: CACHE_HOST
+          value: "redis-service.cache.svc.cluster.local"
+        - name: EXTERNAL_API_HOST
+          value: "external-api.default.svc.cluster.local"
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+# DNS debugging pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-debug
+  labels:
+    app: dns-debug
+spec:
+  containers:
+  - name: dns-debug
+    image: nicolaka/netshoot
+    command: ["sleep", "3600"]
+    
+    # Tools available in this container:
+    # - nslookup
+    # - dig
+    # - host
+    # - ping
+    # - traceroute
+    # - curl
+    # - wget
+---
+# Service for DNS debugging
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-debug-service
+spec:
+  selector:
+    app: dns-debug
+  ports:
+  - port: 80
+    targetPort: 80

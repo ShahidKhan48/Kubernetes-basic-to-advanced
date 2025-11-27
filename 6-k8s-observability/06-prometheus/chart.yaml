@@ -1,0 +1,22 @@
+apiVersion: v2
+name: prometheus
+description: Prometheus monitoring system and time series database
+type: application
+version: 27.45.0
+appVersion: v3.7.3
+home: https://prometheus.io/
+sources:
+  - https://github.com/prometheus/prometheus
+  - https://github.com/prometheus-community/helm-charts
+keywords:
+  - monitoring
+  - prometheus
+  - alertmanager
+  - time-series
+maintainers:
+  - name: Prometheus Community
+    url: https://prometheus.io/community/
+dependencies:
+  - name: prometheus
+    version: 27.45.0
+    repository: https://prometheus-community.github.io/helm-charts

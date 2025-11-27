@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-security-report-log
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-k8s-addons-trivy-operator
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-secret-leaked-from-bitbucket-repositories
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-falco
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-osv-scan-dashboard-repositories
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-nginx-modsecurity-owasp-crs-v0-0
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-trivy-operator-vulnerabilities
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-devops-security-dashboard-falco-dashboard
+  annotations:
+    grafana_folder: "DevOps/Security Dashboard"
+---
+
