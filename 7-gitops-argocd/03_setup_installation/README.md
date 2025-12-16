@@ -141,12 +141,22 @@ Now open → **[https://<instance_public_ip>:8080](https://<instance_public_ip>:
 ```bash
 kubectl get secret argocd-initial-admin-secret -n argocd \
   -o jsonpath="{.data.password}" | base64 -d && echo
-```
+
+OR ELSE PATCH YOUR OWN PASSWORD LIKE
+1. htpasswd -bnBC 10 "" MyNewPassword | tr -d ':\n'   -> OUTPUT Copy and paste it in below commands
+2.  kubectl -n gitops patch secret argocd-secret \
+  -p '{"stringData": {
+    "admin.password": "$2y$10$UjuLcTI85.rFZOqCnoaYXO4lk40oYuXCNHcETIhL5DdJuWE9T7N72",
+    "admin.passwordMtime": "'$(date +%FT%T%Z)'"
+  }}'
+
+3.kubectl -n gitops rollout restart deployment argocd-server
+
 
 Login with:
 
 * Username: `admin`
-* Password: (above output)
+* Password: MyNewPassword
 
 ---
 
