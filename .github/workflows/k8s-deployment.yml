@@ -1,12 +1,25 @@
+name: Deploy Java App to Kubernetes
+
 on:
   push:
     branches:
-    - main
-    - release/*
+      - main   # adjust branch as needed
+
 jobs:
-my_job:
-  name: deploy to staging
-  runs-on: ubuntu-22.04
-- name: Install Dependencies
-  run: npm install
-  
+  deploy:
+    runs-on: self-hosted   # self-hosted runner
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        run: |
+          echo "${{ secrets.kubeconfig }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f ./k8s-project-ci-cd/07-java-app/java-app-deployment.yml
+          kubectl rollout status deployment/java-app
