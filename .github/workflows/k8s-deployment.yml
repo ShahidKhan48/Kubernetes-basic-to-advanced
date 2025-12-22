@@ -22,4 +22,4 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           kubectl apply -f ./9-k8s-project-ci-cd/07-java-app/app.yml
-          kubectl rollout status deployment/my-app
+          kubectl rollout status deployment/my-app  -n java-app-1
